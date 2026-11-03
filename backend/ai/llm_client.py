@@ -29,7 +29,14 @@ class OllamaClient(BaseLLMClient):
         incident: Dict[str, Any],
         evidence_list: List[Dict[str, Any]]
     ) -> InvestigationOutputSchema:
-        endpoint = f"{self.base_url}/api/chat"
+        candidate_urls = [
+            "http://192.168.65.254:11434",
+            self.base_url,
+            "http://host.docker.internal:11434",
+            "http://localhost:11434"
+        ]
+        candidate_urls = list(dict.fromkeys(candidate_urls))
+
         payload = {
             "model": self.model,
             "messages": [
@@ -44,21 +51,42 @@ class OllamaClient(BaseLLMClient):
             }
         }
 
-        try:
-            async with httpx.AsyncClient(timeout=settings.AI_INFERENCE_TIMEOUT_SECONDS) as client:
-                res = await client.post(endpoint, json=payload)
-                if res.status_code == 200:
-                    resp_json = res.json()
-                    content_str = resp_json.get("message", {}).get("content", "{}")
-                    parsed_dict = json.loads(content_str)
-                    return InvestigationOutputSchema(**parsed_dict)
-                else:
-                    raise RuntimeError(f"Ollama returned HTTP {res.status_code}: {res.text}")
-        except Exception as e:
-            if settings.FALLBACK_TO_MOCK_AI:
-                logger.warning(f"Ollama call failed ({e}). Utilizing deterministic AI diagnostic fallback engine.")
-                return MockDeterministicLLMClient().generate_investigation(prompt, incident, evidence_list)
-            raise e
+        last_error = None
+        for base in candidate_urls:
+            endpoint = f"{base}/api/chat"
+            try:
+                timeout_cfg = httpx.Timeout(float(settings.AI_INFERENCE_TIMEOUT_SECONDS), connect=3.0)
+                async with httpx.AsyncClient(timeout=timeout_cfg) as client:
+                    res = await client.post(endpoint, json=payload)
+                    if res.status_code == 200:
+                        resp_json = res.json()
+                        content_str = resp_json.get("message", {}).get("content", "{}").strip()
+                        if content_str.startswith("```json"):
+                            content_str = content_str[7:]
+                        if content_str.startswith("```"):
+                            content_str = content_str[3:]
+                        if content_str.endswith("```"):
+                            content_str = content_str[:-3]
+                        content_str = content_str.strip()
+                        parsed_dict = json.loads(content_str)
+                        logger.info(f"Live Ollama inference succeeded via {base} using {self.model}")
+                        return InvestigationOutputSchema(**parsed_dict)
+                    else:
+                        last_error = RuntimeError(f"Ollama returned HTTP {res.status_code}: {res.text}")
+            except (json.JSONDecodeError, ValueError) as val_err:
+                logger.warning(f"Ollama output validation or JSON parse error from {base}: {val_err}")
+                last_error = val_err
+            except httpx.TimeoutException as timeout_err:
+                logger.warning(f"Ollama inference timed out after {settings.AI_INFERENCE_TIMEOUT_SECONDS}s on {base}: {timeout_err}")
+                last_error = timeout_err
+            except Exception as e:
+                logger.warning(f"Ollama connection or inference error on {base}: {e}")
+                last_error = e
+
+        if settings.FALLBACK_TO_MOCK_AI:
+            logger.warning(f"Ollama call failed ({last_error}). Utilizing deterministic AI diagnostic fallback engine.")
+            return MockDeterministicLLMClient().generate_investigation(prompt, incident, evidence_list)
+        raise last_error
 
 
 class MockDeterministicLLMClient(BaseLLMClient):

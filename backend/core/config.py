@@ -43,8 +43,8 @@ class Settings(BaseSettings):
 
     # AI / Ollama
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "qwen2.5:latest"
-    AI_INFERENCE_TIMEOUT_SECONDS: int = 45
+    OLLAMA_MODEL: str = "qwen2.5-coder:1.5b"
+    AI_INFERENCE_TIMEOUT_SECONDS: int = 60
     FALLBACK_TO_MOCK_AI: bool = True
 
     # Telemetry
@@ -52,8 +52,9 @@ class Settings(BaseSettings):
     ALERTMANAGER_URL: str = "http://localhost:9093"
     LOKI_URL: str = "http://localhost:3100"
 
-    # Monitored Sample Service
+    # Monitored Sample Services
     PAYMENT_SERVICE_URL: str = "http://localhost:8080"
+    ORDER_SERVICE_URL: str = "http://localhost:8081"
 
     # Logging
     LOG_LEVEL: str = "INFO"

@@ -21,3 +21,23 @@ groups:
           summary: "Payment Service instance unreachable"
           description: "Target failed to respond to Prometheus health probe"
 
+      - alert: OrderHighErrorRate
+        expr: sum(rate(http_requests_total{job="order-service",status=~"5.."}[1m])) > 0
+        for: 5s
+        labels:
+          severity: critical
+          service: order-service
+        annotations:
+          summary: "Order Service HTTP 500 error spike detected"
+          description: "Internal Server Errors detected on order-service"
+
+      - alert: OrderServiceUnreachable
+        expr: up{job="order-service"} == 0
+        for: 10s
+        labels:
+          severity: high
+          service: order-service
+        annotations:
+          summary: "Order Service instance unreachable"
+          description: "Target failed to respond to Prometheus health probe"
+

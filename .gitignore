@@ -68,5 +68,6 @@ playwright/.cache/
 
 # Temporary scratch directory
 scratch/
+*.log
 
 

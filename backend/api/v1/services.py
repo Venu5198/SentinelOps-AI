@@ -91,20 +91,34 @@ async def probe_service_health(
     status_val = HealthStatus.UNHEALTHY
     error_msg = None
 
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(target_url)
-            if resp.status_code == 200:
-                status_val = HealthStatus.HEALTHY
-            elif resp.status_code < 500:
-                status_val = HealthStatus.DEGRADED
-                error_msg = f"HTTP {resp.status_code}"
-            else:
+    candidate_urls = [target_url]
+    svc_name = service.get("name", "")
+    if "localhost:8080" in target_url:
+        candidate_urls.append(f"http://payment-service:8080{service['health_endpoint']}")
+    elif "localhost:8081" in target_url:
+        candidate_urls.append(f"http://order-service:8081{service['health_endpoint']}")
+    elif "payment-service" in target_url:
+        candidate_urls.append(f"http://localhost:8080{service['health_endpoint']}")
+    elif "order-service" in target_url:
+        candidate_urls.append(f"http://localhost:8081{service['health_endpoint']}")
+
+    async with httpx.AsyncClient(timeout=4.0) as client:
+        for url in candidate_urls:
+            try:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    status_val = HealthStatus.HEALTHY
+                    error_msg = None
+                    break
+                elif resp.status_code < 500:
+                    status_val = HealthStatus.DEGRADED
+                    error_msg = f"HTTP {resp.status_code}"
+                else:
+                    status_val = HealthStatus.UNHEALTHY
+                    error_msg = f"HTTP {resp.status_code}"
+            except Exception as e:
                 status_val = HealthStatus.UNHEALTHY
-                error_msg = f"HTTP {resp.status_code}"
-    except Exception as e:
-        status_val = HealthStatus.UNHEALTHY
-        error_msg = str(e)
+                error_msg = str(e)
 
     update_fields = {
         "health_status": status_val.value,

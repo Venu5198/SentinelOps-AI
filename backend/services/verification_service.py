@@ -18,7 +18,15 @@ async def verify_service_recovery(incident_id: str, execution_id: str, target_se
     service = await db.services.find_one({"name": target_service})
     endpoint = f"{service['endpoint_url']}{service['health_endpoint']}" if service else "http://localhost:8080/health"
 
-    logger.info(f"Starting recovery verification for incident {incident_id} on {endpoint}")
+    candidate_endpoints = [endpoint]
+    if "payment-service" in target_service or "8080" in endpoint:
+        candidate_endpoints.extend(["http://payment-service:8080/health", "http://localhost:8080/health"])
+    elif "order-service" in target_service or "8081" in endpoint:
+        candidate_endpoints.extend(["http://order-service:8081/health", "http://localhost:8081/health"])
+    # Deduplicate while preserving order
+    candidate_endpoints = list(dict.fromkeys(candidate_endpoints))
+
+    logger.info(f"Starting recovery verification for incident {incident_id} probing {candidate_endpoints}")
 
     consecutive_successes = 0
     max_probes = 10
@@ -27,18 +35,25 @@ async def verify_service_recovery(incident_id: str, execution_id: str, target_se
 
     for probe_num in range(1, max_probes + 1):
         await asyncio.sleep(probe_interval)
-        try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                res = await client.get(endpoint)
-                is_ok = (res.status_code == 200)
-                history.append({"probe": probe_num, "status_code": res.status_code, "ok": is_ok})
-                if is_ok:
-                    consecutive_successes += 1
-                else:
-                    consecutive_successes = 0
-        except Exception as e:
-            # If target service is simulated in tests, simulate recovery passing
-            history.append({"probe": probe_num, "error": str(e), "ok": False})
+        is_ok = False
+        status_code = None
+        error_msg = None
+
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            for ep in candidate_endpoints:
+                try:
+                    res = await client.get(ep)
+                    status_code = res.status_code
+                    if res.status_code == 200:
+                        is_ok = True
+                        break
+                except Exception as e:
+                    error_msg = str(e)
+
+        history.append({"probe": probe_num, "status_code": status_code, "ok": is_ok, "error": error_msg})
+        if is_ok:
+            consecutive_successes += 1
+        else:
             consecutive_successes = 0
 
         # If consecutive successes reaches 3, recovery is verified!

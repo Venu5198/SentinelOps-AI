@@ -43,18 +43,32 @@ async def collect_evidence_for_incident(incident_id: str, service_name: str) -> 
 async def _collect_health_probe_evidence(incident_id: str, service_name: str, now: datetime) -> Dict[str, Any]:
     db = get_database()
     service = await db.services.find_one({"name": service_name})
-    endpoint = f"{service['endpoint_url']}{service['health_endpoint']}" if service else f"http://localhost:8080/health"
+    base_endpoint = f"{service['endpoint_url']}{service['health_endpoint']}" if service else f"http://localhost:8080/health"
 
-    payload = {"endpoint": endpoint, "status": "UNKNOWN", "response_code": None, "error": None}
-    try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            resp = await client.get(endpoint)
-            payload["response_code"] = resp.status_code
-            payload["response_body"] = resp.text[:500]
-            payload["status"] = "HEALTHY" if resp.status_code == 200 else "UNHEALTHY"
-    except Exception as e:
-        payload["status"] = "UNREACHABLE"
-        payload["error"] = str(e)
+    candidate_endpoints = [base_endpoint]
+    if "localhost:8080" in base_endpoint:
+        candidate_endpoints.append(f"http://payment-service:8080/health")
+    elif "localhost:8081" in base_endpoint:
+        candidate_endpoints.append(f"http://order-service:8081/health")
+    elif "payment-service" in base_endpoint:
+        candidate_endpoints.append(f"http://localhost:8080/health")
+    elif "order-service" in base_endpoint:
+        candidate_endpoints.append(f"http://localhost:8081/health")
+
+    payload = {"endpoint": base_endpoint, "status": "UNKNOWN", "response_code": None, "error": None}
+    async with httpx.AsyncClient(timeout=4.0) as client:
+        for ep in candidate_endpoints:
+            try:
+                resp = await client.get(ep)
+                payload["endpoint"] = ep
+                payload["response_code"] = resp.status_code
+                payload["response_body"] = resp.text[:500]
+                payload["status"] = "HEALTHY" if resp.status_code == 200 else "UNHEALTHY"
+                payload["error"] = None
+                break
+            except Exception as e:
+                payload["status"] = "UNREACHABLE"
+                payload["error"] = str(e)
 
     return {
         "_id": f"evi_{uuid.uuid4().hex[:10]}",

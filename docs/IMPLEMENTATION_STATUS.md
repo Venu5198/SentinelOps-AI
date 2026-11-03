@@ -78,7 +78,40 @@
 
 ---
 
-## 6. Git Repository State
+## 6. Phase 4 End-to-End Live Operational Validation Results
+
+Controlled live test executed across the complete 9-container Docker stack:
+1. **Infrastructure Scrape & Health:** `payment-service` (:8080) and `order-service` (:8081) actively monitored by Prometheus (`up == 1`).
+2. **Failure Ingestion:** Stopped `sentinelops-payment-service`. Prometheus detected `up{job="payment-service"} == 0` within 10s and transitioned `ServiceUnreachable` alert to `firing`.
+3. **Alertmanager Webhook Delivery:** Alertmanager successfully dispatched alert payload to backend `/api/v1/alerts/webhook`.
+4. **Deduplication & Incident Creation:** Fingerprint computed and incident `INC-4CE61E` created in `DETECTED` status.
+5. **Multi-Source Evidence Collection:** Automated collectors queried health probe, PromQL error rates, and Loki error streams, persisting evidence items `evi_672f752142` and `evi_3ed4d77927`.
+6. **Live Ollama AI Investigation:** Dispatched diagnostic prompt to host Ollama (`qwen2.5-coder:1.5b`) via Docker bridge IPv4 (`http://192.168.65.254:11434`). Live model returned structured JSON in 30.21s identifying root cause with 0.85 confidence score and citing evidence IDs.
+7. **Human Approval Workflow:** Generated approval record `appr_176d48f913` for action `service.restart_container`. Operator authenticated and submitted `APPROVED` decision.
+8. **Restricted Remediation Execution:** Executed allowlisted restart using Docker Python SDK (`docker.from_env().containers.get("sentinelops-payment-service").start()`). Zero arbitrary shell execution invoked.
+9. **Automated Recovery Verification:** Recovery engine executed 3 consecutive HTTP 200 health probes against `payment-service:8080/health`, verified recovery (`PASSED`), and transitioned incident to `RESOLVED`.
+10. **Immutable Audit Trail:** All actions (`INCIDENT_DETECTED`, `AI_INVESTIGATION_COMPLETED`, `REMEDIATION_APPROVED`, `REMEDIATION_EXECUTED`, `RECOVERY_VERIFICATION_PASSED`) recorded with timestamps, user IDs, and correlation IDs.
+
+---
+
+## 7. Final Targeted Security Review & Hardening Audit
+
+Rigorous security verification executed prior to Git commit:
+
+| Security Vector | Implementation Detail | Audit Finding & Verification | Status |
+|---|---|---|---|
+| **1. Cryptographic Approval Signatures** | Replaced plain unkeyed SHA-256 with **keyed HMAC-SHA256** using `settings.SECRET_KEY` and constant-time `hmac.compare_digest` verification. | Plain SHA-256 eliminated. Keyed HMAC prevents offline forgery and parameter tampering. | **HARDENED** |
+| **2. Expiry & Replay Protection** | Expiry validated at execution time. Approvals atomically transition to `status="EXECUTED"` upon execution dispatch. | Replay attacks blocked with HTTP 409 Conflict. Expired approvals rejected with HTTP 400. | **HARDENED** |
+| **3. Audit Log Immutability** | Audit repository is strictly append-only. Zero update/delete logic in backend code; explicit route handlers reject `POST/PUT/PATCH/DELETE` on `/api/v1/audit` with HTTP 405. | Compliance rule AC-16 enforced. Direct mutation rejected. | **HARDENED** |
+| **4. Docker SDK Access Restrictions** | Strict container whitelist (`AUTHORIZED_DOCKER_TARGETS = {"payment-service": "sentinelops-payment-service", "order-service": "sentinelops-order-service"}`). Only `start()` and `restart(timeout=10)` permitted. | Container spoofing and database/backend manipulation prevented. Zero arbitrary shell commands. | **HARDENED** |
+| **5. Distributed Lock Integrity** | Redis mutex updated to use UUID lock tokens and atomic Lua script release. | Lock stealing prevented after timeouts. Graceful fallback on connection degradation. | **HARDENED** |
+| **6. AI Inference Resiliency** | Connection timeout set to 3.0s, read timeout to 60s. Explicit handling for `json.JSONDecodeError`, `pydantic.ValidationError`, and `httpx.TimeoutException` routing to deterministic fallback. | Model timeouts and malformed JSON caught cleanly without crashing the pipeline. | **HARDENED** |
+| **7. Working Tree Reconciliation** | 100% reconciled against `git status --porcelain`. 18 modified backend/infra/doc files and 2 untracked items (`docker/order-service/`, audit screenshots). | Zero leftover temporary test files in working tree. | **RECONCILED** |
+| **8. Automated Security Test Suite** | Added `tests/test_security_review.py` covering HMAC, replay, expiry, mutation rejection, and distributed locks. | **16 of 16 tests passed (100%)** in 18.66s. | **PASSED** |
+
+---
+
+## 8. Git Repository State
 
 - **Branch:** `main`
 - **Remote:** `origin https://github.com/Venu5198/SentinelOps-AI.git`

@@ -1,19 +1,42 @@
 import hashlib
+import hmac
 import json
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from fastapi import HTTPException, status
+from backend.core.config import settings
 from backend.core.logger import logger
 from backend.db.mongodb import get_database
 from backend.models.approval import ApprovalResponse, ApprovalStatus
 from backend.services.audit_service import record_audit_log
 
 
-def compute_action_signature(action_id: str, target_service: str, parameters: Dict[str, Any]) -> str:
-    """Computes deterministic SHA256 signature binding the exact action and parameters."""
+def compute_action_signature(
+    action_id: str,
+    target_service: str,
+    parameters: Dict[str, Any],
+    secret_key: Optional[str] = None
+) -> str:
+    """
+    Computes a keyed HMAC-SHA256 signature binding the exact action, target service, and canonical parameters.
+    Prevents parameter tampering and unauthorized offline signature generation.
+    """
+    key = (secret_key or settings.SECRET_KEY).encode("utf-8")
     canonical = json.dumps(parameters or {}, sort_keys=True)
-    raw = f"{action_id}:{target_service}:{canonical}"
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    raw = f"{action_id}:{target_service}:{canonical}".encode("utf-8")
+    return hmac.new(key, raw, hashlib.sha256).hexdigest()
+
+
+def verify_action_signature(
+    signature: str,
+    action_id: str,
+    target_service: str,
+    parameters: Dict[str, Any],
+    secret_key: Optional[str] = None
+) -> bool:
+    """Constant-time verification of keyed HMAC-SHA256 signature against timing attacks."""
+    expected = compute_action_signature(action_id, target_service, parameters, secret_key)
+    return hmac.compare_digest(expected, signature)
 
 
 async def process_approval_decision(
@@ -44,7 +67,10 @@ async def process_approval_decision(
     now = datetime.now(timezone.utc)
 
     # Check expiration (AC-11)
-    if appr["expires_at"].replace(tzinfo=timezone.utc) < now:
+    expires_at = appr["expires_at"]
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < now:
         await db.approvals.update_one(
             {"_id": approval_id},
             {"$set": {"status": ApprovalStatus.EXPIRED.value}}

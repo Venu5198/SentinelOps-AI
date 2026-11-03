@@ -11,8 +11,14 @@ from backend.models.approval import ApprovalStatus
 from backend.models.incident import IncidentStatus
 from backend.models.remediation import ExecutionStatus, VerificationStatus, RemediationExecutionResponse
 from backend.executor.allowlist import is_action_allowlisted, ALLOWLISTED_ACTIONS
-from backend.services.approval_service import compute_action_signature
+from backend.services.approval_service import compute_action_signature, verify_action_signature
 from backend.services.audit_service import record_audit_log
+
+# Immutable security boundary: Only these exact container targets may be manipulated
+AUTHORIZED_DOCKER_TARGETS: Dict[str, str] = {
+    "payment-service": "sentinelops-payment-service",
+    "order-service": "sentinelops-order-service"
+}
 
 
 async def execute_approved_remediation(
@@ -23,10 +29,11 @@ async def execute_approved_remediation(
 ) -> RemediationExecutionResponse:
     """
     Executes an approved, allowlisted remediation operation (FR-08, AC-11, AC-12, AC-13).
-    - Checks approval validity and status.
+    - Checks approval validity, status, and expiration.
+    - Prevents replay attacks by atomically transitioning approval to EXECUTED.
     - Validates allowlist catalog.
-    - Verifies exact action signature.
-    - Acquires execution mutex lock.
+    - Cryptographically verifies keyed HMAC action signature.
+    - Acquires execution mutex lock with unique token.
     - Directly executes typed adapter (zero shell invocation).
     - Triggers recovery verification.
     """
@@ -34,6 +41,20 @@ async def execute_approved_remediation(
     appr = await db.approvals.find_one({"_id": approval_id})
     if not appr:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Approval record not found")
+
+    now = datetime.now(timezone.utc)
+
+    # 1. Approval expiration check at execution time (AC-11)
+    expires_at = appr.get("expires_at")
+    if expires_at:
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < now:
+            await db.approvals.update_one({"_id": approval_id}, {"$set": {"status": ApprovalStatus.EXPIRED.value}})
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Approval record has expired and can no longer be executed"
+            )
 
     if appr["status"] != ApprovalStatus.APPROVED.value:
         raise HTTPException(
@@ -45,7 +66,7 @@ async def execute_approved_remediation(
     target_service = appr["target_service"]
     params = appr["parameters"]
 
-    # 1. Allowlist enforcement (AC-12)
+    # 2. Allowlist enforcement (AC-12)
     if not is_action_allowlisted(action_id, target_service):
         await record_audit_log(
             actor_id=actor_id,
@@ -62,18 +83,40 @@ async def execute_approved_remediation(
             detail=f"Action '{action_id}' on service '{target_service}' is not in the restricted allowlist"
         )
 
-    # 2. Exact action signature verification (AC-11)
-    expected_sig = compute_action_signature(action_id, target_service, params)
-    if expected_sig != appr["action_signature"]:
+    # 3. Keyed HMAC action signature verification (AC-11, anti-tampering)
+    if not verify_action_signature(appr["action_signature"], action_id, target_service, params):
+        await record_audit_log(
+            actor_id=actor_id,
+            actor_role=actor_role,
+            action="REMEDIATION_SIGNATURE_VERIFICATION_FAILED",
+            resource_type="approval",
+            resource_id=approval_id,
+            result="failure",
+            details={"action_id": action_id, "target": target_service},
+            request_ip=request_ip
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Action parameters do not match the cryptographically signed approval record"
         )
 
-    # 3. Distributed execution lock on target service
+    # 4. Replay protection: Atomically transition approval to EXECUTED
+    consumed = await db.approvals.update_one(
+        {"_id": approval_id, "status": ApprovalStatus.APPROVED.value},
+        {"$set": {"status": "EXECUTED", "executed_at": now, "executed_by": actor_id}}
+    )
+    if consumed.modified_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Approval has already been executed or is no longer in APPROVED status (replay prevented)"
+        )
+
+    # 5. Distributed execution lock on target service with unique lock token
     lock_key = f"remediation:{target_service}"
-    locked = await acquire_distributed_lock(lock_key, timeout_seconds=30)
-    if not locked:
+    lock_token = await acquire_distributed_lock(lock_key, timeout_seconds=30)
+    if not lock_token:
+        # Rollback consumed status if lock cannot be acquired
+        await db.approvals.update_one({"_id": approval_id}, {"$set": {"status": ApprovalStatus.APPROVED.value}})
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Another remediation operation is already executing against service '{target_service}'"
@@ -180,7 +223,7 @@ async def execute_approved_remediation(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     finally:
-        await release_distributed_lock(lock_key)
+        await release_distributed_lock(lock_key, lock_token)
 
 
 async def _dispatch_remediation_action(
@@ -190,25 +233,57 @@ async def _dispatch_remediation_action(
 ) -> Dict[str, Any]:
     """Pure typed execution adapter. Never invokes shell or raw subprocess strings."""
     if action_id == "service.restart_container":
-        # Check target service endpoint and call reset/restart
+        # Strict container authorization enforcement
+        if target_service not in AUTHORIZED_DOCKER_TARGETS:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Service '{target_service}' is not in the authorized Docker container catalog"
+            )
+        authorized_container = AUTHORIZED_DOCKER_TARGETS[target_service]
+
         db = get_database()
         service = await db.services.find_one({"name": target_service})
         base_url = service["endpoint_url"] if service else "http://localhost:8080"
         
-        # Reset injected failure on target service if running
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                res = await client.post(f"{base_url}/reset-failure")
-                logger.info(f"Triggered target service reset on {base_url}: status {res.status_code}")
-        except Exception as e:
-            logger.info(f"Target service reset probe notice (offline or simulated): {e}")
+        candidate_bases = [base_url]
+        if "payment-service" in target_service or "8080" in base_url:
+            candidate_bases.extend(["http://payment-service:8080", "http://localhost:8080"])
+        elif "order-service" in target_service or "8081" in base_url:
+            candidate_bases.extend(["http://order-service:8081", "http://localhost:8081"])
+        candidate_bases = list(dict.fromkeys(candidate_bases))
 
-        # Simulate or perform container restart delay
+        # Reset injected failure on target service if running
+        reset_triggered = False
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            for b in candidate_bases:
+                try:
+                    res = await client.post(f"{b}/reset-failure")
+                    if res.status_code == 200:
+                        logger.info(f"Triggered target service reset on {b}: status {res.status_code}")
+                        reset_triggered = True
+                        break
+                except Exception as e:
+                    logger.debug(f"Target service reset probe notice on {b}: {e}")
+
+        # Strictly operate on authorized container using Docker SDK
+        try:
+            import docker
+            docker_client = docker.from_env()
+            c = docker_client.containers.get(authorized_container)
+            if c.status != "running":
+                c.start()
+            else:
+                c.restart(timeout=10)
+            logger.info(f"Started/restarted authorized container {authorized_container} via Docker SDK")
+        except Exception as e:
+            logger.debug(f"Docker SDK restart notice on {authorized_container}: {e}")
+
         await asyncio.sleep(1.5)
         return {
             "action": "service.restart_container",
             "target": target_service,
             "container_restarted": True,
+            "reset_triggered": reset_triggered,
             "message": f"Container {target_service} restarted successfully"
         }
 

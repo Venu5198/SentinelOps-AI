@@ -1,8 +1,23 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, AlertTriangle, Server, FileText, CheckCircle2 } from 'lucide-react';
+import { api } from '../../services/api';
 
 export const Sidebar: React.FC = () => {
+  const [aiStatus, setAiStatus] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchAi = async () => {
+      try {
+        const res = await api.get('/health/ai');
+        setAiStatus(res.data);
+      } catch (e) {
+        // default fallback state
+      }
+    };
+    fetchAi();
+  }, []);
+
   const links = [
     { to: '/', label: 'Overview', icon: LayoutDashboard },
     { to: '/incidents', label: 'Incidents', icon: AlertTriangle },
@@ -36,11 +51,17 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       <div className="bg-slate-800/50 rounded-xl p-3.5 border border-slate-800 text-xs text-slate-400">
-        <div className="font-semibold text-slate-300 mb-1">Ollama AI Runtime</div>
-        <div className="text-[11px] text-slate-400">Model: qwen2.5 (local)</div>
-        <div className="text-[11px] text-emerald-400 mt-1 flex items-center space-x-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-          <span>Inference Ready</span>
+        <div className="font-semibold text-slate-300 mb-1">
+          {aiStatus?.live_ollama ? 'Ollama AI Runtime' : 'AI Diagnostic Engine'}
+        </div>
+        <div className="text-[11px] text-slate-400">
+          Model: {aiStatus?.configured_model || 'qwen2.5-coder:1.5b'}
+        </div>
+        <div className="text-[11px] mt-1 flex items-center space-x-1">
+          <span className={`w-1.5 h-1.5 rounded-full ${aiStatus?.live_ollama ? 'bg-emerald-400' : 'bg-sky-400'}`}></span>
+          <span className={aiStatus?.live_ollama ? 'text-emerald-400' : 'text-sky-300'}>
+            {aiStatus?.live_ollama ? 'Live Inference Ready' : 'Deterministic Engine'}
+          </span>
         </div>
       </div>
     </aside>

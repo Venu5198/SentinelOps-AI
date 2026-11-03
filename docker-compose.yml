@@ -27,7 +27,9 @@ services:
       - ALERTMANAGER_URL=http://alertmanager:9093
       - LOKI_URL=http://loki:3100
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - OLLAMA_MODEL=qwen2.5-coder:1.5b
       - PAYMENT_SERVICE_URL=http://payment-service:8080
+      - ORDER_SERVICE_URL=http://order-service:8081
       - FALLBACK_TO_MOCK_AI=true
     depends_on:
       - mongodb
@@ -89,6 +91,15 @@ services:
     container_name: sentinelops-payment-service
     ports:
       - "8080:8080"
+    restart: unless-stopped
+
+  order-service:
+    build:
+      context: ./docker/order-service
+      dockerfile: Dockerfile
+    container_name: sentinelops-order-service
+    ports:
+      - "8081:8081"
     restart: unless-stopped
 
 volumes:

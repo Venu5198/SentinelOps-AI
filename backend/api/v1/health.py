@@ -21,6 +21,44 @@ async def health_check():
     }
 
 
+@router.get("/health/ai", status_code=status.HTTP_200_OK)
+async def ai_health():
+    """Checks live Ollama connectivity and configured model."""
+    import httpx
+    candidate_urls = [
+        "http://192.168.65.254:11434",
+        settings.OLLAMA_BASE_URL,
+        "http://host.docker.internal:11434",
+        "http://localhost:11434"
+    ]
+    candidate_urls = list(dict.fromkeys(candidate_urls))
+
+    ollama_live = False
+    active_url = None
+    available_models = []
+
+    async with httpx.AsyncClient(timeout=2.0) as client:
+        for url in candidate_urls:
+            try:
+                res = await client.get(f"{url}/api/tags")
+                if res.status_code == 200:
+                    ollama_live = True
+                    active_url = url
+                    available_models = [m.get("name") for m in res.json().get("models", [])]
+                    break
+            except Exception:
+                pass
+
+    return {
+        "status": "ready" if ollama_live else "fallback_active",
+        "live_ollama": ollama_live,
+        "endpoint": active_url,
+        "configured_model": settings.OLLAMA_MODEL,
+        "available_models": available_models,
+        "mode": "Ollama Local Inference" if ollama_live else "Deterministic Diagnostic Engine"
+    }
+
+
 @router.get("/ready", status_code=status.HTTP_200_OK)
 async def readiness_check():
     """Readiness probe: validates database and cache connectivity."""

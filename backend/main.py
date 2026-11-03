@@ -69,39 +69,52 @@ async def _seed_initial_data(db):
                     {"$set": {"password_hash": get_password_hash("AdminPass123!")}}
                 )
 
-        # 2. Seed Default Monitored Payment Service
-        svc_count = await db.services.count_documents({})
-        if svc_count == 0:
-            import datetime
-            now = datetime.datetime.now(datetime.timezone.utc)
-            sample_services = [
+        # 2. Seed / Sync Monitored Services (payment-service, order-service)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        services_specs = [
+            {
+                "_id": "svc_payment_001",
+                "name": "payment-service",
+                "environment": "production" if settings.ENVIRONMENT == "production" else "local",
+                "endpoint_url": settings.PAYMENT_SERVICE_URL,
+                "health_endpoint": "/health",
+                "metrics_endpoint": "/metrics",
+                "health_status": HealthStatus.HEALTHY.value,
+                "monitoring_enabled": True
+            },
+            {
+                "_id": "svc_order_002",
+                "name": "order-service",
+                "environment": "production" if settings.ENVIRONMENT == "production" else "local",
+                "endpoint_url": settings.ORDER_SERVICE_URL,
+                "health_endpoint": "/health",
+                "metrics_endpoint": "/metrics",
+                "health_status": HealthStatus.HEALTHY.value,
+                "monitoring_enabled": True
+            }
+        ]
+        for spec in services_specs:
+            await db.services.update_one(
+                {"name": spec["name"]},
                 {
-                    "_id": "svc_payment_001",
-                    "name": "payment-service",
-                    "environment": "local",
-                    "endpoint_url": "http://localhost:8080",
-                    "health_endpoint": "/health",
-                    "metrics_endpoint": "/metrics",
-                    "health_status": HealthStatus.HEALTHY.value,
-                    "monitoring_enabled": True,
-                    "last_check_at": now,
-                    "created_at": now
+                    "$set": {
+                        "endpoint_url": spec["endpoint_url"],
+                        "health_endpoint": spec["health_endpoint"],
+                        "metrics_endpoint": spec["metrics_endpoint"],
+                        "environment": spec["environment"],
+                        "monitoring_enabled": True,
+                        "updated_at": now
+                    },
+                    "$setOnInsert": {
+                        "_id": spec["_id"],
+                        "name": spec["name"],
+                        "health_status": HealthStatus.HEALTHY.value,
+                        "created_at": now
+                    }
                 },
-                {
-                    "_id": "svc_order_002",
-                    "name": "order-service",
-                    "environment": "local",
-                    "endpoint_url": "http://localhost:8081",
-                    "health_endpoint": "/health",
-                    "metrics_endpoint": "/metrics",
-                    "health_status": HealthStatus.HEALTHY.value,
-                    "monitoring_enabled": True,
-                    "last_check_at": now,
-                    "created_at": now
-                }
-            ]
-            await db.services.insert_many(sample_services)
-            logger.info("Seeded initial sample monitored services (payment-service, order-service)")
+                upsert=True
+            )
+        logger.info("Synced monitored services in database (payment-service, order-service)")
     except Exception as e:
         logger.warning(f"Initial data seed notice: {e}")
 
