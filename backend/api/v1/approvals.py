@@ -1,18 +1,17 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from backend.core.rbac import get_current_user, require_role, AuthenticatedUser
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+from backend.core.rbac import AuthenticatedUser, get_current_user, require_role
 from backend.db.mongodb import get_database
-from backend.models.approval import ApprovalResponse, ApprovalDecision, ApprovalStatus
+from backend.models.approval import ApprovalDecision, ApprovalResponse
 from backend.services.approval_service import process_approval_decision
 
 router = APIRouter(prefix="/approvals", tags=["Human Approvals & Gates"])
 
 
 @router.get("", response_model=List[ApprovalResponse])
-async def list_approvals(
-    incident_id: str = None,
-    current_user: AuthenticatedUser = Depends(get_current_user)
-):
+async def list_approvals(incident_id: str = None, current_user: AuthenticatedUser = Depends(get_current_user)):
     """List pending or historical approvals."""
     db = get_database()
     query = {}
@@ -24,10 +23,7 @@ async def list_approvals(
 
 
 @router.get("/{approval_id}", response_model=ApprovalResponse)
-async def get_approval(
-    approval_id: str,
-    current_user: AuthenticatedUser = Depends(get_current_user)
-):
+async def get_approval(approval_id: str, current_user: AuthenticatedUser = Depends(get_current_user)):
     db = get_database()
     doc = await db.approvals.find_one({"_id": approval_id})
     if not doc:
@@ -40,7 +36,7 @@ async def decide_approval(
     approval_id: str,
     decision_in: ApprovalDecision,
     request: Request,
-    current_user: AuthenticatedUser = Depends(require_role(["operator", "admin"]))  # AC-09
+    current_user: AuthenticatedUser = Depends(require_role(["operator", "admin"])),  # AC-09
 ):
     """
     Operator or Admin approves or rejects proposed remediation (FR-07, AC-09, AC-10).
@@ -51,6 +47,5 @@ async def decide_approval(
         reason=decision_in.reason or "",
         actor_id=current_user.user_id,
         actor_role=current_user.role,
-        request_ip=request.client.host if request.client else None
+        request_ip=request.client.host if request.client else None,
     )
-

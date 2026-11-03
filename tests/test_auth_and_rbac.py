@@ -3,11 +3,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_user_registration_and_login(client):
-    reg_payload = {
-        "email": "testops@sentinelops.com",
-        "password": "Password123!",
-        "role": "operator"
-    }
+    reg_payload = {"email": "testops@sentinelops.com", "password": "Password123!", "role": "operator"}
     # Register
     res = await client.post("/api/v1/auth/register", json=reg_payload)
     assert res.status_code == 201
@@ -16,10 +12,9 @@ async def test_user_registration_and_login(client):
     assert data["role"] == "operator"
 
     # Login
-    login_res = await client.post("/api/v1/auth/login", json={
-        "email": reg_payload["email"],
-        "password": reg_payload["password"]
-    })
+    login_res = await client.post(
+        "/api/v1/auth/login", json={"email": reg_payload["email"], "password": reg_payload["password"]}
+    )
     assert login_res.status_code == 200
     token_data = login_res.json()
     assert "access_token" in token_data
@@ -34,16 +29,8 @@ async def test_user_registration_and_login(client):
 @pytest.mark.asyncio
 async def test_rbac_protection_viewer_forbidden_from_admin_actions(client, viewer_token):
     # Viewer tries to register a service (admin-only)
-    svc_payload = {
-        "name": "unauthorized-service",
-        "environment": "local",
-        "endpoint_url": "http://localhost:9999"
-    }
-    res = await client.post(
-        "/api/v1/services",
-        json=svc_payload,
-        headers={"Authorization": f"Bearer {viewer_token}"}
-    )
+    svc_payload = {"name": "unauthorized-service", "environment": "local", "endpoint_url": "http://localhost:9999"}
+    res = await client.post("/api/v1/services", json=svc_payload, headers={"Authorization": f"Bearer {viewer_token}"})
     assert res.status_code == 403
     assert "not authorized" in res.json()["detail"]
 

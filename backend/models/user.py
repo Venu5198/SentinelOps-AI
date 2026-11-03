@@ -1,8 +1,9 @@
 from datetime import datetime
-from typing import Optional
-from pydantic import EmailStr, Field
-from backend.models.common import BaseSchema, get_utc_now
+
+from pydantic import Field
+
 from backend.core.rbac import UserRole
+from backend.models.common import BaseSchema
 
 
 class UserCreate(BaseSchema):

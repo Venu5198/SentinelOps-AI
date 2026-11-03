@@ -2,25 +2,21 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_full_incident_investigation_approval_and_remediation_flow(
-    client, operator_token, viewer_token
-):
+async def test_full_incident_investigation_approval_and_remediation_flow(client, operator_token, viewer_token):
     # 1. Ingest alert to trigger incident
     alert_payload = {
         "status": "firing",
-        "alerts": [{
-            "status": "firing",
-            "labels": {
-                "alertname": "PaymentGatewayTimeout",
-                "service": "payment-service",
-                "severity": "high"
-            },
-            "annotations": {
-                "summary": "Payment Service 504 Gateway Timeout spike",
-                "description": "Repeated connection pool timeouts"
-            },
-            "fingerprint": "fp_flow_test_1001"
-        }]
+        "alerts": [
+            {
+                "status": "firing",
+                "labels": {"alertname": "PaymentGatewayTimeout", "service": "payment-service", "severity": "high"},
+                "annotations": {
+                    "summary": "Payment Service 504 Gateway Timeout spike",
+                    "description": "Repeated connection pool timeouts",
+                },
+                "fingerprint": "fp_flow_test_1001",
+            }
+        ],
     }
     ingest_res = await client.post("/api/v1/alerts/webhook", json=alert_payload)
     assert ingest_res.status_code == 200
@@ -28,8 +24,7 @@ async def test_full_incident_investigation_approval_and_remediation_flow(
 
     # 2. Trigger AI Investigation (FR-05, AC-07)
     inv_res = await client.post(
-        f"/api/v1/incidents/{incident_id}/investigations",
-        headers={"Authorization": f"Bearer {operator_token}"}
+        f"/api/v1/incidents/{incident_id}/investigations", headers={"Authorization": f"Bearer {operator_token}"}
     )
     assert inv_res.status_code == 201
     inv_data = inv_res.json()
@@ -44,15 +39,13 @@ async def test_full_incident_investigation_approval_and_remediation_flow(
 
     # Verify incident state progressed to AWAITING_APPROVAL
     inc_check = await client.get(
-        f"/api/v1/incidents/{incident_id}",
-        headers={"Authorization": f"Bearer {operator_token}"}
+        f"/api/v1/incidents/{incident_id}", headers={"Authorization": f"Bearer {operator_token}"}
     )
     assert inc_check.json()["status"] == "AWAITING_APPROVAL"
 
     # 3. List Approvals
     appr_list_res = await client.get(
-        f"/api/v1/approvals?incident_id={incident_id}",
-        headers={"Authorization": f"Bearer {operator_token}"}
+        f"/api/v1/approvals?incident_id={incident_id}", headers={"Authorization": f"Bearer {operator_token}"}
     )
     assert appr_list_res.status_code == 200
     approvals = appr_list_res.json()
@@ -64,7 +57,7 @@ async def test_full_incident_investigation_approval_and_remediation_flow(
     forbidden_res = await client.post(
         f"/api/v1/approvals/{approval_id}/decide",
         json={"decision": "APPROVED", "reason": "Viewer trying unauthorized approval"},
-        headers={"Authorization": f"Bearer {viewer_token}"}
+        headers={"Authorization": f"Bearer {viewer_token}"},
     )
     assert forbidden_res.status_code == 403
 
@@ -72,7 +65,7 @@ async def test_full_incident_investigation_approval_and_remediation_flow(
     approve_res = await client.post(
         f"/api/v1/approvals/{approval_id}/decide",
         json={"decision": "APPROVED", "reason": "Operator verified logs and approved restart"},
-        headers={"Authorization": f"Bearer {operator_token}"}
+        headers={"Authorization": f"Bearer {operator_token}"},
     )
     assert approve_res.status_code == 200
     assert approve_res.json()["status"] == "APPROVED"
@@ -81,7 +74,7 @@ async def test_full_incident_investigation_approval_and_remediation_flow(
     exec_res = await client.post(
         "/api/v1/remediations/execute",
         json={"incident_id": incident_id, "approval_id": approval_id},
-        headers={"Authorization": f"Bearer {operator_token}"}
+        headers={"Authorization": f"Bearer {operator_token}"},
     )
     assert exec_res.status_code == 201
     exec_data = exec_res.json()
@@ -90,8 +83,7 @@ async def test_full_incident_investigation_approval_and_remediation_flow(
 
     # 7. Check Audit Logs (FR-11, AC-16)
     audit_res = await client.get(
-        f"/api/v1/audit?resource_id={incident_id}",
-        headers={"Authorization": f"Bearer {operator_token}"}
+        f"/api/v1/audit?resource_id={incident_id}", headers={"Authorization": f"Bearer {operator_token}"}
     )
     assert audit_res.status_code == 200
     logs = audit_res.json()
@@ -99,11 +91,9 @@ async def test_full_incident_investigation_approval_and_remediation_flow(
 
     # 8. Generate Final Post-Incident Report (FR-12, AC-18)
     rep_res = await client.get(
-        f"/api/v1/reports/incidents/{incident_id}",
-        headers={"Authorization": f"Bearer {operator_token}"}
+        f"/api/v1/reports/incidents/{incident_id}", headers={"Authorization": f"Bearer {operator_token}"}
     )
     assert rep_res.status_code == 200
     rep_data = rep_res.json()
     assert "markdown_report" in rep_data
     assert "Post-Mortem Report" in rep_data["markdown_report"]
-

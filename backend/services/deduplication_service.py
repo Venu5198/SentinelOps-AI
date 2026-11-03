@@ -1,11 +1,12 @@
 import hashlib
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
+
 from backend.core.logger import logger
 from backend.db.mongodb import get_database
 from backend.db.redis import acquire_distributed_lock, release_distributed_lock
-from backend.models.incident import IncidentSeverity, IncidentStatus, IncidentResponse
+from backend.models.incident import IncidentSeverity, IncidentStatus
 
 
 def generate_fingerprint(service: str, alertname: str, severity: str) -> str:
@@ -33,7 +34,7 @@ async def process_incoming_alert(alert_data: Dict[str, Any]) -> Tuple[Dict[str, 
         "medium": IncidentSeverity.MEDIUM,
         "low": IncidentSeverity.LOW,
         "warning": IncidentSeverity.MEDIUM,
-        "info": IncidentSeverity.INFO
+        "info": IncidentSeverity.INFO,
     }
     severity = sev_map.get(raw_severity, IncidentSeverity.HIGH)
 
@@ -54,13 +55,10 @@ async def process_incoming_alert(alert_data: Dict[str, Any]) -> Tuple[Dict[str, 
             IncidentStatus.REMEDIATING.value,
             IncidentStatus.VERIFYING.value,
             IncidentStatus.FAILED.value,
-            IncidentStatus.ESCALATED.value
+            IncidentStatus.ESCALATED.value,
         ]
 
-        existing = await db.incidents.find_one({
-            "fingerprint": fingerprint,
-            "status": {"$in": active_statuses}
-        })
+        existing = await db.incidents.find_one({"fingerprint": fingerprint, "status": {"$in": active_statuses}})
 
         now = datetime.now(timezone.utc)
 
@@ -69,10 +67,7 @@ async def process_incoming_alert(alert_data: Dict[str, Any]) -> Tuple[Dict[str, 
             logger.info(f"Deduplicating alert for active incident {existing['_id']} (fingerprint: {fingerprint})")
             update_data = {
                 "$inc": {"occurrence_count": 1},
-                "$set": {
-                    "updated_at": now,
-                    "last_alert_payload": alert_data
-                }
+                "$set": {"updated_at": now, "last_alert_payload": alert_data},
             }
             await db.incidents.update_one({"_id": existing["_id"]}, update_data)
             existing["occurrence_count"] += 1
@@ -99,7 +94,7 @@ async def process_incoming_alert(alert_data: Dict[str, Any]) -> Tuple[Dict[str, 
             "detected_at": now,
             "updated_at": now,
             "resolved_at": None,
-            "metadata": {"raw_alert": alert_data}
+            "metadata": {"raw_alert": alert_data},
         }
 
         await db.incidents.insert_one(new_doc)
@@ -108,4 +103,3 @@ async def process_incoming_alert(alert_data: Dict[str, Any]) -> Tuple[Dict[str, 
 
     finally:
         await release_distributed_lock(lock_key)
-

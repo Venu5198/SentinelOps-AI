@@ -1,7 +1,8 @@
 import asyncio
 from datetime import datetime, timezone
-from typing import Any, Dict
+
 import httpx
+
 from backend.core.logger import logger
 from backend.db.mongodb import get_database
 from backend.models.incident import IncidentStatus
@@ -62,7 +63,7 @@ async def verify_service_recovery(incident_id: str, execution_id: str, target_se
 
     # If endpoint wasn't reached because service was purely offline, check if test mode or mock
     # Allow test suite to simulate passing verification
-    is_verified = (consecutive_successes >= 3)
+    is_verified = consecutive_successes >= 3
     # If simulated run where target service isn't a live external HTTP port, treat completed action as recovered
     if not is_verified and len(history) > 0 and all("error" in h for h in history):
         # Fallback check: if service record in DB exists and was reset, verify as passed
@@ -75,14 +76,16 @@ async def verify_service_recovery(incident_id: str, execution_id: str, target_se
     # Update remediation execution
     await db.remediation_executions.update_one(
         {"_id": execution_id},
-        {"$set": {
-            "verification_status": v_status,
-            "verification_details": {
-                "probes": history,
-                "consecutive_successes": consecutive_successes,
-                "verified_at": now.isoformat()
+        {
+            "$set": {
+                "verification_status": v_status,
+                "verification_details": {
+                    "probes": history,
+                    "consecutive_successes": consecutive_successes,
+                    "verified_at": now.isoformat(),
+                },
             }
-        }}
+        },
     )
 
     # Update incident lifecycle
@@ -93,7 +96,9 @@ async def verify_service_recovery(incident_id: str, execution_id: str, target_se
 
     # Update service status to healthy if passed
     if is_verified:
-        await db.services.update_one({"name": target_service}, {"$set": {"health_status": "healthy", "last_check_at": now}})
+        await db.services.update_one(
+            {"name": target_service}, {"$set": {"health_status": "healthy", "last_check_at": now}}
+        )
 
     await record_audit_log(
         actor_id="verification_engine",
@@ -102,9 +107,8 @@ async def verify_service_recovery(incident_id: str, execution_id: str, target_se
         resource_type="incident",
         resource_id=incident_id,
         result="success" if is_verified else "failure",
-        details={"consecutive_successes": consecutive_successes, "target_service": target_service}
+        details={"consecutive_successes": consecutive_successes, "target_service": target_service},
     )
 
     logger.info(f"Recovery verification for incident {incident_id} ended with status {v_status}")
     return is_verified
-

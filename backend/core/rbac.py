@@ -1,7 +1,9 @@
 from enum import Enum
 from typing import List, Optional
+
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
 from backend.core.security import decode_access_token
 
 security_bearer = HTTPBearer(auto_error=False)
@@ -24,7 +26,7 @@ class AuthenticatedUser:
 
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Security(security_bearer)
+    credentials: Optional[HTTPAuthorizationCredentials] = Security(security_bearer),
 ) -> AuthenticatedUser:
     if not credentials:
         raise HTTPException(
@@ -52,14 +54,12 @@ async def get_current_user(
 
 
 def require_role(allowed_roles: List[str]):
-    async def role_checker(
-        current_user: AuthenticatedUser = Depends(get_current_user)
-    ) -> AuthenticatedUser:
+    async def role_checker(current_user: AuthenticatedUser = Depends(get_current_user)) -> AuthenticatedUser:
         if current_user.role not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"User role '{current_user.role}' is not authorized. Required: {allowed_roles}"
+                detail=f"User role '{current_user.role}' is not authorized. Required: {allowed_roles}",
             )
         return current_user
-    return role_checker
 
+    return role_checker

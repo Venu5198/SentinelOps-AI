@@ -1,18 +1,17 @@
 from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from backend.core.rbac import get_current_user, AuthenticatedUser
+
+from backend.core.rbac import AuthenticatedUser, get_current_user
 from backend.db.mongodb import get_database
-from backend.models.evidence import EvidenceResponse, EvidenceCreate
+from backend.models.evidence import EvidenceResponse
 from backend.services.evidence_collector import collect_evidence_for_incident
 
 router = APIRouter(prefix="/incidents/{incident_id}/evidence", tags=["Diagnostic Evidence"])
 
 
 @router.get("", response_model=List[EvidenceResponse])
-async def get_incident_evidence(
-    incident_id: str,
-    current_user: AuthenticatedUser = Depends(get_current_user)
-):
+async def get_incident_evidence(incident_id: str, current_user: AuthenticatedUser = Depends(get_current_user)):
     """Retrieve all diagnostic evidence collected for this incident (AC-05, AC-18)."""
     db = get_database()
     cursor = db.evidence.find({"incident_id": incident_id}).sort("observed_at", -1)
@@ -21,10 +20,7 @@ async def get_incident_evidence(
 
 
 @router.post("/collect", response_model=List[EvidenceResponse])
-async def trigger_evidence_collection(
-    incident_id: str,
-    current_user: AuthenticatedUser = Depends(get_current_user)
-):
+async def trigger_evidence_collection(incident_id: str, current_user: AuthenticatedUser = Depends(get_current_user)):
     """Triggers multi-source diagnostic evidence collection (FR-04)."""
     db = get_database()
     incident = await db.incidents.find_one({"_id": incident_id})
@@ -33,4 +29,3 @@ async def trigger_evidence_collection(
 
     collected = await collect_evidence_for_incident(incident_id, incident["service_name"])
     return [EvidenceResponse(**c) for c in collected]
-

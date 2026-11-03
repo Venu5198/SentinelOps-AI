@@ -1,11 +1,13 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
 import httpx
+
 from backend.core.config import settings
 from backend.core.logger import logger
 from backend.db.mongodb import get_database
-from backend.models.evidence import EvidenceSource, EvidenceType, EvidenceResponse
+from backend.models.evidence import EvidenceSource, EvidenceType
 
 
 async def collect_evidence_for_incident(incident_id: str, service_name: str) -> List[Dict[str, Any]]:
@@ -43,17 +45,19 @@ async def collect_evidence_for_incident(incident_id: str, service_name: str) -> 
 async def _collect_health_probe_evidence(incident_id: str, service_name: str, now: datetime) -> Dict[str, Any]:
     db = get_database()
     service = await db.services.find_one({"name": service_name})
-    base_endpoint = f"{service['endpoint_url']}{service['health_endpoint']}" if service else f"http://localhost:8080/health"
+    base_endpoint = (
+        f"{service['endpoint_url']}{service['health_endpoint']}" if service else "http://localhost:8080/health"
+    )
 
     candidate_endpoints = [base_endpoint]
     if "localhost:8080" in base_endpoint:
-        candidate_endpoints.append(f"http://payment-service:8080/health")
+        candidate_endpoints.append("http://payment-service:8080/health")
     elif "localhost:8081" in base_endpoint:
-        candidate_endpoints.append(f"http://order-service:8081/health")
+        candidate_endpoints.append("http://order-service:8081/health")
     elif "payment-service" in base_endpoint:
-        candidate_endpoints.append(f"http://localhost:8080/health")
+        candidate_endpoints.append("http://localhost:8080/health")
     elif "order-service" in base_endpoint:
-        candidate_endpoints.append(f"http://localhost:8081/health")
+        candidate_endpoints.append("http://localhost:8081/health")
 
     payload = {"endpoint": base_endpoint, "status": "UNKNOWN", "response_code": None, "error": None}
     async with httpx.AsyncClient(timeout=4.0) as client:
@@ -79,7 +83,7 @@ async def _collect_health_probe_evidence(incident_id: str, service_name: str, no
         "payload": payload,
         "summary": f"Health check returned {payload['status']} (code: {payload['response_code']})",
         "observed_at": now,
-        "created_at": now
+        "created_at": now,
     }
 
 
@@ -87,8 +91,14 @@ async def _collect_prometheus_metrics(incident_id: str, service_name: str, now: 
     results = []
     prom_url = f"{settings.PROMETHEUS_URL}/api/v1/query"
     queries = [
-        {"name": "http_error_rate_5xx", "query": f'sum(rate(http_requests_total{{job="{service_name}",status=~"5.."}}[5m])) / sum(rate(http_requests_total{{job="{service_name}"}}[5m]))'},
-        {"name": "request_latency_p95_seconds", "query": f'histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{{job="{service_name}"}}[5m])) by (le))'}
+        {
+            "name": "http_error_rate_5xx",
+            "query": f'sum(rate(http_requests_total{{job="{service_name}",status=~"5.."}}[5m])) / sum(rate(http_requests_total{{job="{service_name}"}}[5m]))',
+        },
+        {
+            "name": "request_latency_p95_seconds",
+            "query": f'histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{{job="{service_name}"}}[5m])) by (le))',
+        },
     ]
 
     for q in queries:
@@ -101,7 +111,7 @@ async def _collect_prometheus_metrics(incident_id: str, service_name: str, now: 
             "payload": {},
             "summary": "",
             "observed_at": now,
-            "created_at": now
+            "created_at": now,
         }
         try:
             async with httpx.AsyncClient(timeout=2.0) as client:
@@ -134,7 +144,7 @@ async def _collect_loki_logs(incident_id: str, service_name: str, now: datetime)
         "payload": {},
         "summary": "",
         "observed_at": now,
-        "created_at": now
+        "created_at": now,
     }
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
@@ -151,4 +161,3 @@ async def _collect_loki_logs(incident_id: str, service_name: str, now: datetime)
         ev_doc["summary"] = f"Loki unavailable: {e}"
 
     return ev_doc
-
