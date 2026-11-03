@@ -47,20 +47,27 @@ async def lifespan(app: FastAPI):
 
 async def _seed_initial_data(db):
     try:
-        # 1. Seed Admin User
-        admin_count = await db.users.count_documents({"role": UserRole.ADMIN.value})
-        if admin_count == 0:
-            import datetime
-            admin_doc = {
-                "_id": "user_admin_001",
-                "email": "admin@sentinelops.local",
-                "password_hash": get_password_hash("Admin1234!"),
-                "role": UserRole.ADMIN.value,
-                "is_active": True,
-                "created_at": datetime.datetime.now(datetime.timezone.utc)
-            }
-            await db.users.insert_one(admin_doc)
-            logger.info("Seeded initial default admin account: admin@sentinelops.local")
+        # 1. Seed Default Admin Accounts
+        for email_addr in ["admin@sentinelops.local", "admin@sentinelops.com"]:
+            existing = await db.users.find_one({"email": email_addr})
+            if not existing:
+                import datetime
+                admin_doc = {
+                    "_id": f"user_admin_{uuid.uuid4().hex[:8]}",
+                    "email": email_addr,
+                    "password_hash": get_password_hash("AdminPass123!"),
+                    "role": UserRole.ADMIN.value,
+                    "is_active": True,
+                    "created_at": datetime.datetime.now(datetime.timezone.utc)
+                }
+                await db.users.insert_one(admin_doc)
+                logger.info(f"Seeded initial admin account: {email_addr}")
+            else:
+                # Ensure password is AdminPass123!
+                await db.users.update_one(
+                    {"email": email_addr},
+                    {"$set": {"password_hash": get_password_hash("AdminPass123!")}}
+                )
 
         # 2. Seed Default Monitored Payment Service
         svc_count = await db.services.count_documents({})

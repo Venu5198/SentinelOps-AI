@@ -6,19 +6,19 @@ from backend.core.rbac import UserRole
 
 
 class UserCreate(BaseSchema):
-    email: EmailStr
+    email: str
     password: str = Field(min_length=8)
     role: UserRole = UserRole.VIEWER
 
 
 class UserLogin(BaseSchema):
-    email: EmailStr
+    email: str
     password: str
 
 
 class UserResponse(BaseSchema):
     id: str = Field(validation_alias="_id")
-    email: EmailStr
+    email: str
     role: UserRole
     is_active: bool = True
     created_at: datetime

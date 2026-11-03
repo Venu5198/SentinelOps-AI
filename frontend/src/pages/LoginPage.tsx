@@ -5,8 +5,8 @@ import { Shield, Lock, Mail } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('admin@sentinelops.local');
-  const [password, setPassword] = useState('Admin1234!');
+  const [email, setEmail] = useState('admin@sentinelops.com');
+  const [password, setPassword] = useState('AdminPass123!');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -20,7 +20,18 @@ export const LoginPage: React.FC = () => {
       localStorage.setItem('sentinelops_user', JSON.stringify(res.data.user));
       navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Authentication failed');
+      let msg = 'Authentication failed';
+      if (err.response?.data?.detail) {
+        const detail = err.response.data.detail;
+        if (typeof detail === 'string') {
+          msg = detail;
+        } else if (Array.isArray(detail)) {
+          msg = detail.map((d: any) => d.msg || JSON.stringify(d)).join(', ');
+        } else if (typeof detail === 'object') {
+          msg = JSON.stringify(detail);
+        }
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -84,7 +95,7 @@ export const LoginPage: React.FC = () => {
         </form>
 
         <div className="mt-6 pt-4 border-t border-slate-800 text-center text-xs text-slate-500">
-          Default seed credentials: <code className="text-slate-400">admin@sentinelops.local</code> / <code className="text-slate-400">Admin1234!</code>
+          Default seed credentials: <code className="text-slate-400">admin@sentinelops.com</code> / <code className="text-slate-400">AdminPass123!</code>
         </div>
       </div>
     </div>
