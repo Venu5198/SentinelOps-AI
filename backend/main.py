@@ -1,8 +1,9 @@
 import uuid
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from backend.core.config import settings
 from backend.core.logger import logger, correlation_id_ctx
 from backend.core.security import get_password_hash
@@ -130,6 +131,11 @@ async def correlation_id_middleware(request: Request, call_next):
 
 # Register Root Health Checks
 app.include_router(health_router)
+
+# Prometheus Metrics Endpoint
+@app.get("/metrics", include_in_schema=False)
+def metrics():
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 # Register Versioned API Routers
 api_v1_prefix = "/api/v1"
