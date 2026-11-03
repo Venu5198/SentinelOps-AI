@@ -1,0 +1,96 @@
+version: "3.8"
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: sentinelops-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: sentinelops-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - MONGODB_URI=mongodb://mongodb:27017
+      - REDIS_URL=redis://redis:6379/0
+      - PROMETHEUS_URL=http://prometheus:9090
+      - ALERTMANAGER_URL=http://alertmanager:9093
+      - LOKI_URL=http://loki:3100
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - PAYMENT_SERVICE_URL=http://payment-service:8080
+      - FALLBACK_TO_MOCK_AI=true
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:7.0
+    container_name: sentinelops-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.0-alpine
+    container_name: sentinelops-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: sentinelops-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: sentinelops-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./docker/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.1.0
+    container_name: sentinelops-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./docker/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+    restart: unless-stopped
+
+  payment-service:
+    build:
+      context: ./docker/payment-service
+      dockerfile: Dockerfile
+    container_name: sentinelops-payment-service
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
+  redis_data:

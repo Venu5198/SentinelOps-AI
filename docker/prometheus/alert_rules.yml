@@ -1,0 +1,23 @@
+groups:
+  - name: sentinelops_alerts
+    rules:
+      - alert: PaymentHighErrorRate
+        expr: sum(rate(http_requests_total{job="payment-service",status=~"5.."}[1m])) > 0
+        for: 5s
+        labels:
+          severity: critical
+          service: payment-service
+        annotations:
+          summary: "Payment Service HTTP 500 error spike detected"
+          description: "Internal Server Errors detected on payment-service"
+
+      - alert: ServiceUnreachable
+        expr: up{job="payment-service"} == 0
+        for: 10s
+        labels:
+          severity: high
+          service: payment-service
+        annotations:
+          summary: "Payment Service instance unreachable"
+          description: "Target failed to respond to Prometheus health probe"
+
