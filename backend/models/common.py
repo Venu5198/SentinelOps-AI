@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
-
-from pydantic import BaseModel
+from typing import Any, Optional
+from pydantic import BaseModel, Field
 
 
 def get_utc_now() -> datetime:
@@ -8,4 +8,7 @@ def get_utc_now() -> datetime:
 
 
 class BaseSchema(BaseModel):
-    model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True
+    }

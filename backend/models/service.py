@@ -1,9 +1,7 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
-
+from typing import Optional, Dict, Any
 from pydantic import Field
-
 from backend.models.common import BaseSchema, get_utc_now
 
 

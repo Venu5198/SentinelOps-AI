@@ -1,8 +1,7 @@
+import asyncio
 from typing import Any, Optional
-
 import mongomock
-from motor.motor_asyncio import AsyncIOMotorClient
-
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from backend.core.config import settings
 from backend.core.logger import logger
 
@@ -85,9 +84,9 @@ async def connect_to_mongodb():
             settings.MONGODB_URI,
             minPoolSize=settings.MONGODB_MIN_POOL_SIZE,
             maxPoolSize=settings.MONGODB_MAX_POOL_SIZE,
-            serverSelectionTimeoutMS=2000,
+            serverSelectionTimeoutMS=2000
         )
-        await client.admin.command("ping")
+        await client.admin.command('ping')
         _mongo_client = client
         _mongo_db = client[settings.MONGODB_DATABASE]
         _is_mock = False

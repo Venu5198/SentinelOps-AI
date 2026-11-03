@@ -1,30 +1,29 @@
 import uuid
 from contextlib import asynccontextmanager
-
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-
-from backend.api.v1.alerts import router as alerts_router
-from backend.api.v1.approvals import router as approvals_router
-from backend.api.v1.audit import router as audit_router
-from backend.api.v1.auth import router as auth_router
-from backend.api.v1.evidence import router as evidence_router
+from fastapi.responses import JSONResponse
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from backend.core.config import settings
+from backend.core.logger import logger, correlation_id_ctx
+from backend.core.security import get_password_hash
+from backend.db.mongodb import connect_to_mongodb, close_mongodb_connection, get_database
+from backend.db.redis import connect_to_redis, close_redis_connection
+from backend.models.user import UserRole
+from backend.models.service import HealthStatus
 
 # Import Routers
 from backend.api.v1.health import router as health_router
-from backend.api.v1.incidents import router as incidents_router
-from backend.api.v1.investigations import router as investigations_router
-from backend.api.v1.remediations import router as remediations_router
-from backend.api.v1.reports import router as reports_router
+from backend.api.v1.auth import router as auth_router
 from backend.api.v1.services import router as services_router
-from backend.core.config import settings
-from backend.core.logger import correlation_id_ctx, logger
-from backend.core.security import get_password_hash
-from backend.db.mongodb import close_mongodb_connection, connect_to_mongodb
-from backend.db.redis import close_redis_connection, connect_to_redis
-from backend.models.service import HealthStatus
-from backend.models.user import UserRole
+from backend.api.v1.incidents import router as incidents_router
+from backend.api.v1.alerts import router as alerts_router
+from backend.api.v1.evidence import router as evidence_router
+from backend.api.v1.investigations import router as investigations_router
+from backend.api.v1.approvals import router as approvals_router
+from backend.api.v1.remediations import router as remediations_router
+from backend.api.v1.audit import router as audit_router
+from backend.api.v1.reports import router as reports_router
 
 
 @asynccontextmanager
@@ -53,21 +52,21 @@ async def _seed_initial_data(db):
             existing = await db.users.find_one({"email": email_addr})
             if not existing:
                 import datetime
-
                 admin_doc = {
                     "_id": f"user_admin_{uuid.uuid4().hex[:8]}",
                     "email": email_addr,
                     "password_hash": get_password_hash("AdminPass123!"),
                     "role": UserRole.ADMIN.value,
                     "is_active": True,
-                    "created_at": datetime.datetime.now(datetime.timezone.utc),
+                    "created_at": datetime.datetime.now(datetime.timezone.utc)
                 }
                 await db.users.insert_one(admin_doc)
                 logger.info(f"Seeded initial admin account: {email_addr}")
             else:
                 # Ensure password is AdminPass123!
                 await db.users.update_one(
-                    {"email": email_addr}, {"$set": {"password_hash": get_password_hash("AdminPass123!")}}
+                    {"email": email_addr},
+                    {"$set": {"password_hash": get_password_hash("AdminPass123!")}}
                 )
 
         # 2. Seed / Sync Monitored Services (payment-service, order-service)
@@ -81,7 +80,7 @@ async def _seed_initial_data(db):
                 "health_endpoint": "/health",
                 "metrics_endpoint": "/metrics",
                 "health_status": HealthStatus.HEALTHY.value,
-                "monitoring_enabled": True,
+                "monitoring_enabled": True
             },
             {
                 "_id": "svc_order_002",
@@ -91,8 +90,8 @@ async def _seed_initial_data(db):
                 "health_endpoint": "/health",
                 "metrics_endpoint": "/metrics",
                 "health_status": HealthStatus.HEALTHY.value,
-                "monitoring_enabled": True,
-            },
+                "monitoring_enabled": True
+            }
         ]
         for spec in services_specs:
             await db.services.update_one(
@@ -104,16 +103,16 @@ async def _seed_initial_data(db):
                         "metrics_endpoint": spec["metrics_endpoint"],
                         "environment": spec["environment"],
                         "monitoring_enabled": True,
-                        "updated_at": now,
+                        "updated_at": now
                     },
                     "$setOnInsert": {
                         "_id": spec["_id"],
                         "name": spec["name"],
                         "health_status": HealthStatus.HEALTHY.value,
-                        "created_at": now,
-                    },
+                        "created_at": now
+                    }
                 },
-                upsert=True,
+                upsert=True
             )
         logger.info("Synced monitored services in database (payment-service, order-service)")
     except Exception as e:
@@ -124,7 +123,7 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     description="Autonomous AI-Powered IT Incident Management Platform API",
-    lifespan=lifespan,
+    lifespan=lifespan
 )
 
 # CORS Configuration
@@ -153,12 +152,10 @@ async def correlation_id_middleware(request: Request, call_next):
 # Register Root Health Checks
 app.include_router(health_router)
 
-
 # Prometheus Metrics Endpoint
 @app.get("/metrics", include_in_schema=False)
 def metrics():
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
-
 
 # Register Versioned API Routers
 api_v1_prefix = "/api/v1"
@@ -173,3 +170,4 @@ app.include_router(approvals_router, prefix=api_v1_prefix)
 app.include_router(remediations_router, prefix=api_v1_prefix)
 app.include_router(audit_router, prefix=api_v1_prefix)
 app.include_router(reports_router, prefix=api_v1_prefix)
+

@@ -262,19 +262,25 @@ async def _dispatch_remediation_action(action_id: str, target_service: str, para
                 except Exception as e:
                     logger.debug(f"Target service reset probe notice on {b}: {e}")
 
-        # Strictly operate on authorized container using Docker SDK
-        try:
-            import docker
+        # In test environments, mock container restart to ensure strict CI isolation
+        from backend.core.config import settings
 
-            docker_client = docker.from_env()
-            c = docker_client.containers.get(authorized_container)
-            if c.status != "running":
-                c.start()
-            else:
-                c.restart(timeout=10)
-            logger.info(f"Started/restarted authorized container {authorized_container} via Docker SDK")
-        except Exception as e:
-            logger.debug(f"Docker SDK restart notice on {authorized_container}: {e}")
+        if settings.ENVIRONMENT == "test" or settings.USE_MOCK_DB:
+            logger.info(f"Test environment active: simulated container restart for {authorized_container}")
+        else:
+            # Strictly operate on authorized container using Docker SDK in production
+            try:
+                import docker
+
+                docker_client = docker.from_env()
+                c = docker_client.containers.get(authorized_container)
+                if c.status != "running":
+                    c.start()
+                else:
+                    c.restart(timeout=10)
+                logger.info(f"Started/restarted authorized container {authorized_container} via Docker SDK")
+            except Exception as e:
+                logger.debug(f"Docker SDK restart notice on {authorized_container}: {e}")
 
         await asyncio.sleep(1.5)
         return {

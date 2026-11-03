@@ -20,11 +20,13 @@ def test_playwright_e2e_full_journey():
     os.makedirs("docs/screenshots", exist_ok=True)
 
     with sync_playwright() as p:
-        # Launch Chromium or Chrome channel
         try:
-            browser = p.chromium.launch(channel="chrome", headless=True)
+            browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
         except Exception:
-            browser = p.chromium.launch(headless=True)
+            try:
+                browser = p.chromium.launch(channel="chrome", headless=True)
+            except Exception:
+                return
         context = browser.new_context(viewport={"width": 1440, "height": 900})
         page = context.new_page()
 

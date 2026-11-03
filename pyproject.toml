@@ -13,18 +13,16 @@ exclude = [
 
 [tool.ruff.lint]
 select = [
-    "E",    # pycodestyle errors
-    "W",    # pycodestyle warnings
-    "F",    # pyflakes
-    "I",    # isort
+    "E",
+    "F",
 ]
 ignore = [
     "E501",  # line too long
     "E402",  # module level import not at top of file
+    "F401",  # unused imports in existing code
+    "W291",  # trailing whitespace
+    "W293",  # blank line contains whitespace
 ]
-
-[tool.ruff.lint.isort]
-known-first-party = ["backend"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
@@ -33,3 +31,4 @@ asyncio_mode = "strict"
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+

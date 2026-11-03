@@ -1,8 +1,6 @@
 from typing import Any, Dict
-
 from fastapi import APIRouter, Depends, HTTPException, status
-
-from backend.core.rbac import AuthenticatedUser, get_current_user
+from backend.core.rbac import get_current_user, AuthenticatedUser
 from backend.db.mongodb import get_database
 
 router = APIRouter(prefix="/reports", tags=["Incident Reports & Analytics"])
@@ -10,7 +8,8 @@ router = APIRouter(prefix="/reports", tags=["Incident Reports & Analytics"])
 
 @router.get("/incidents/{incident_id}")
 async def generate_incident_report(
-    incident_id: str, current_user: AuthenticatedUser = Depends(get_current_user)
+    incident_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """Generates a complete post-incident report with timeline, evidence, AI diagnosis, approvals, and recovery (FR-12, AC-18)."""
     db = get_database()
@@ -32,7 +31,7 @@ async def generate_incident_report(
         "## 1. Executive Summary",
         f"{incident.get('description', '')}\n",
         "## 2. Diagnostic Evidence Collected",
-        f"Total evidence items: {len(evidence)}",
+        f"Total evidence items: {len(evidence)}"
     ]
     for ev in evidence:
         md_lines.append(f"- **[{ev['source'].upper()}]** {ev['name']}: {ev.get('summary', '')}")
@@ -52,15 +51,11 @@ async def generate_incident_report(
 
     md_lines.append("\n## 4. Remediation & Human Approval")
     for app in approvals:
-        md_lines.append(
-            f"- Action: `{app['action_id']}` on `{app['target_service']}` | Status: **{app['status']}** (by {app.get('approved_by') or 'N/A'})"
-        )
+        md_lines.append(f"- Action: `{app['action_id']}` on `{app['target_service']}` | Status: **{app['status']}** (by {app.get('approved_by') or 'N/A'})")
 
     md_lines.append("\n## 5. Execution & Recovery Verification")
     for ex in executions:
-        md_lines.append(
-            f"- Execution `{ex['_id']}`: Status **{ex['status']}**, Recovery Verification: **{ex['verification_status']}**"
-        )
+        md_lines.append(f"- Execution `{ex['_id']}`: Status **{ex['status']}**, Recovery Verification: **{ex['verification_status']}**")
 
     return {
         "incident": incident,
@@ -70,5 +65,6 @@ async def generate_incident_report(
         "approvals": approvals,
         "executions": executions,
         "audit_logs": audit,
-        "markdown_report": "\n".join(md_lines),
+        "markdown_report": "\n".join(md_lines)
     }
+

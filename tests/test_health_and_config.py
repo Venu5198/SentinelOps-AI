@@ -27,3 +27,4 @@ async def test_correlation_id_middleware(client):
     res = await client.get("/health", headers={"X-Correlation-ID": custom_id})
     assert res.status_code == 200
     assert res.headers.get("X-Correlation-ID") == custom_id
+

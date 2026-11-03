@@ -62,3 +62,4 @@ flowchart TD
 2. **Secret Quarantining:** No secrets or credentials are logged or passed to untrusted environments.
 3. **Infrastructure Isolation:** CI tests run against in-memory mock adapters (`mongomock-motor`, `fakeredis`, mocked Ollama diagnostic engine). Zero destructive commands or real cluster actions are executed in CI.
 4. **Action Pinning:** All GitHub Actions use pinned major versions (`@v4`, `@v5`, `@v2`).
+

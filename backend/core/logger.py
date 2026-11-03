@@ -34,3 +34,4 @@ def setup_logger(name: str = "sentinelops") -> logging.Logger:
 
 
 logger = setup_logger()
+

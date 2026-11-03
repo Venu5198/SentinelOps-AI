@@ -1,10 +1,8 @@
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
-
-from pydantic import Field
-
-from backend.models.common import BaseSchema
+from pydantic import Field, field_validator
+from backend.models.common import BaseSchema, get_utc_now
 
 
 class IncidentSeverity(str, Enum):
@@ -31,38 +29,57 @@ class IncidentStatus(str, Enum):
 
 # Valid state transitions graph (FR-03)
 VALID_TRANSITIONS: Dict[IncidentStatus, List[IncidentStatus]] = {
-    IncidentStatus.DETECTED: [IncidentStatus.ACKNOWLEDGED, IncidentStatus.INVESTIGATING, IncidentStatus.CLOSED],
-    IncidentStatus.ACKNOWLEDGED: [IncidentStatus.INVESTIGATING, IncidentStatus.ESCALATED, IncidentStatus.CLOSED],
+    IncidentStatus.DETECTED: [
+        IncidentStatus.ACKNOWLEDGED,
+        IncidentStatus.INVESTIGATING,
+        IncidentStatus.CLOSED
+    ],
+    IncidentStatus.ACKNOWLEDGED: [
+        IncidentStatus.INVESTIGATING,
+        IncidentStatus.ESCALATED,
+        IncidentStatus.CLOSED
+    ],
     IncidentStatus.INVESTIGATING: [
         IncidentStatus.ROOT_CAUSE_IDENTIFIED,
         IncidentStatus.FAILED,
-        IncidentStatus.ESCALATED,
+        IncidentStatus.ESCALATED
     ],
     IncidentStatus.ROOT_CAUSE_IDENTIFIED: [
         IncidentStatus.AWAITING_APPROVAL,
         IncidentStatus.INVESTIGATING,
-        IncidentStatus.ESCALATED,
+        IncidentStatus.ESCALATED
     ],
-    IncidentStatus.AWAITING_APPROVAL: [IncidentStatus.REMEDIATING, IncidentStatus.FAILED, IncidentStatus.ESCALATED],
-    IncidentStatus.REMEDIATING: [IncidentStatus.VERIFYING, IncidentStatus.FAILED],
-    IncidentStatus.VERIFYING: [IncidentStatus.RESOLVED, IncidentStatus.FAILED, IncidentStatus.ESCALATED],
+    IncidentStatus.AWAITING_APPROVAL: [
+        IncidentStatus.REMEDIATING,
+        IncidentStatus.FAILED,
+        IncidentStatus.ESCALATED
+    ],
+    IncidentStatus.REMEDIATING: [
+        IncidentStatus.VERIFYING,
+        IncidentStatus.FAILED
+    ],
+    IncidentStatus.VERIFYING: [
+        IncidentStatus.RESOLVED,
+        IncidentStatus.FAILED,
+        IncidentStatus.ESCALATED
+    ],
     IncidentStatus.FAILED: [
         IncidentStatus.INVESTIGATING,
         IncidentStatus.AWAITING_APPROVAL,
         IncidentStatus.ESCALATED,
-        IncidentStatus.CLOSED,
+        IncidentStatus.CLOSED
     ],
     IncidentStatus.ESCALATED: [
         IncidentStatus.INVESTIGATING,
         IncidentStatus.AWAITING_APPROVAL,
         IncidentStatus.RESOLVED,
-        IncidentStatus.CLOSED,
+        IncidentStatus.CLOSED
     ],
     IncidentStatus.RESOLVED: [
         IncidentStatus.CLOSED,
-        IncidentStatus.DETECTED,  # In case of recurring bounce
+        IncidentStatus.DETECTED  # In case of recurring bounce
     ],
-    IncidentStatus.CLOSED: [],
+    IncidentStatus.CLOSED: []
 }
 
 

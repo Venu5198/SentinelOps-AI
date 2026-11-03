@@ -1,17 +1,16 @@
 import pytest
 import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
-
+from httpx import AsyncClient, ASGITransport
 from backend.core.config import settings
 
 # Force test environment for tests
 settings.ENVIRONMENT = "test"
 settings.USE_MOCK_DB = True
 
+from backend.main import app, _seed_initial_data
 from backend.core.security import create_access_token
-from backend.db.mongodb import close_mongodb_connection, connect_to_mongodb
-from backend.db.redis import close_redis_connection, connect_to_redis
-from backend.main import _seed_initial_data, app
+from backend.db.mongodb import connect_to_mongodb, close_mongodb_connection
+from backend.db.redis import connect_to_redis, close_redis_connection
 
 
 @pytest_asyncio.fixture(scope="session", autouse=True)

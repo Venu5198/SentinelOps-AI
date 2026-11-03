@@ -24,12 +24,11 @@ class OllamaClient(BaseLLMClient):
     async def generate_investigation(
         self, prompt: str, incident: Dict[str, Any], evidence_list: List[Dict[str, Any]]
     ) -> InvestigationOutputSchema:
-        candidate_urls = [
-            "http://192.168.65.254:11434",
-            self.base_url,
-            "http://host.docker.internal:11434",
-            "http://localhost:11434",
-        ]
+        candidate_urls = [self.base_url]
+        if "host.docker.internal" in self.base_url:
+            candidate_urls.append("http://localhost:11434")
+        elif "localhost" in self.base_url or "127.0.0.1" in self.base_url:
+            candidate_urls.append("http://host.docker.internal:11434")
         candidate_urls = list(dict.fromkeys(candidate_urls))
 
         payload = {

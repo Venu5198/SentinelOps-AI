@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 # Hardcoded catalog of allowlisted remediation actions (FR-08, AC-11, AC-12)
 # Any action not explicitly enumerated here is rejected with zero shell invocation.
@@ -11,7 +11,7 @@ ALLOWLISTED_ACTIONS: Dict[str, Dict[str, Any]] = {
         "allowed_parameters": {},
         "risk_level": "MEDIUM",
         "timeout_seconds": 30,
-        "requires_approval": True,
+        "requires_approval": True
     },
     "service.health_check": {
         "action_id": "service.health_check",
@@ -21,7 +21,7 @@ ALLOWLISTED_ACTIONS: Dict[str, Dict[str, Any]] = {
         "allowed_parameters": {},
         "risk_level": "LOW",
         "timeout_seconds": 10,
-        "requires_approval": False,
+        "requires_approval": False
     },
     "cache.clear_service_key": {
         "action_id": "cache.clear_service_key",
@@ -31,8 +31,8 @@ ALLOWLISTED_ACTIONS: Dict[str, Dict[str, Any]] = {
         "allowed_parameters": {"key_pattern": str},
         "risk_level": "LOW",
         "timeout_seconds": 5,
-        "requires_approval": True,
-    },
+        "requires_approval": True
+    }
 }
 
 
@@ -43,3 +43,4 @@ def is_action_allowlisted(action_id: str, target_service: str) -> bool:
     if target_service not in action.get("allowed_services", []):
         return False
     return True
+

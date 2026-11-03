@@ -1,15 +1,11 @@
 from datetime import datetime, timezone
 from typing import List, Optional
-
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-
-from backend.core.rbac import AuthenticatedUser, get_current_user, require_role
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from backend.core.rbac import get_current_user, require_role, AuthenticatedUser, UserRole
 from backend.db.mongodb import get_database
 from backend.models.incident import (
-    IncidentResponse,
-    IncidentStatus,
-    IncidentUpdate,
-    is_valid_transition,
+    IncidentCreate, IncidentUpdate, IncidentResponse, IncidentStatus, IncidentSeverity,
+    is_valid_transition
 )
 from backend.services.audit_service import record_audit_log
 
@@ -22,7 +18,7 @@ async def list_incidents(
     service_filter: Optional[str] = Query(None, alias="service"),
     severity_filter: Optional[str] = Query(None, alias="severity"),
     limit: int = Query(50, ge=1, le=200),
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(get_current_user)
 ):
     """List and filter incidents by status, service, and severity (FR-03, AC-04)."""
     db = get_database()
@@ -40,12 +36,18 @@ async def list_incidents(
 
 
 @router.get("/{incident_id}", response_model=IncidentResponse)
-async def get_incident(incident_id: str, current_user: AuthenticatedUser = Depends(get_current_user)):
+async def get_incident(
+    incident_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user)
+):
     """Retrieve full incident details (AC-18)."""
     db = get_database()
     incident = await db.incidents.find_one({"_id": incident_id})
     if not incident:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Incident '{incident_id}' not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Incident '{incident_id}' not found"
+        )
     return IncidentResponse(**incident)
 
 
@@ -54,7 +56,7 @@ async def transition_incident_status(
     incident_id: str,
     update_data: IncidentUpdate,
     request: Request,
-    current_user: AuthenticatedUser = Depends(require_role(["operator", "admin"])),
+    current_user: AuthenticatedUser = Depends(require_role(["operator", "admin"]))
 ):
     """
     Validates and executes lifecycle state transitions according to PRD FR-03 state DAG.
@@ -63,7 +65,10 @@ async def transition_incident_status(
     db = get_database()
     incident = await db.incidents.find_one({"_id": incident_id})
     if not incident:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Incident '{incident_id}' not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Incident '{incident_id}' not found"
+        )
 
     current_status = IncidentStatus(incident["status"])
     target_status = update_data.status
@@ -72,7 +77,7 @@ async def transition_incident_status(
         if not is_valid_transition(current_status, target_status):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid state transition from '{current_status.value}' to '{target_status.value}'",
+                detail=f"Invalid state transition from '{current_status.value}' to '{target_status.value}'"
             )
 
     now = datetime.now(timezone.utc)
@@ -101,9 +106,10 @@ async def transition_incident_status(
         details={
             "old_status": current_status.value,
             "new_status": target_status.value if target_status else current_status.value,
-            "comment": update_data.comment,
+            "comment": update_data.comment
         },
-        request_ip=request.client.host if request.client else None,
+        request_ip=request.client.host if request.client else None
     )
 
     return IncidentResponse(**incident)
+

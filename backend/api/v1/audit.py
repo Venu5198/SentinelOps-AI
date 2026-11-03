@@ -1,8 +1,6 @@
 from typing import List, Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-
-from backend.core.rbac import AuthenticatedUser, get_current_user
+from backend.core.rbac import get_current_user, require_role, AuthenticatedUser
 from backend.db.mongodb import get_database
 from backend.models.audit_log import AuditLogResponse
 
@@ -15,7 +13,7 @@ async def list_audit_logs(
     actor_id: Optional[str] = Query(None),
     resource_id: Optional[str] = Query(None),
     limit: int = Query(100, ge=1, le=500),
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(get_current_user)
 ):
     """Query immutable audit log entries (FR-11, AC-16)."""
     db = get_database()
@@ -43,5 +41,6 @@ async def reject_audit_mutation():
     """Permanent rejection of any audit log modification or deletion."""
     raise HTTPException(
         status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
-        detail="Audit repository is strictly append-only. Modification and deletion operations are permanently forbidden by compliance policy.",
+        detail="Audit repository is strictly append-only. Modification and deletion operations are permanently forbidden by compliance policy."
     )
+

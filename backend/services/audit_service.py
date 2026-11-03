@@ -1,10 +1,9 @@
 import uuid
-from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-
-from backend.core.logger import correlation_id_ctx, logger
+from datetime import datetime, timezone
 from backend.db.mongodb import get_database
-from backend.models.audit_log import AuditLogResponse
+from backend.core.logger import logger, correlation_id_ctx
+from backend.models.audit_log import AuditLogCreate, AuditLogResponse
 
 
 async def record_audit_log(
@@ -15,7 +14,7 @@ async def record_audit_log(
     resource_id: str,
     result: str = "success",
     details: Optional[Dict[str, Any]] = None,
-    request_ip: Optional[str] = None,
+    request_ip: Optional[str] = None
 ) -> AuditLogResponse:
     db = get_database()
     corr_id = correlation_id_ctx.get("")
@@ -30,7 +29,7 @@ async def record_audit_log(
         "details": details or {},
         "request_ip": request_ip,
         "correlation_id": corr_id,
-        "timestamp": datetime.now(timezone.utc),
+        "timestamp": datetime.now(timezone.utc)
     }
     try:
         await db.audit_logs.insert_one(log_doc)
@@ -39,3 +38,4 @@ async def record_audit_log(
         logger.error(f"FAILED TO WRITE AUDIT LOG: {action} ({e})")
         raise e
     return AuditLogResponse(**log_doc)
+

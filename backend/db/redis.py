@@ -1,8 +1,6 @@
 import uuid
-from typing import Optional
-
+from typing import Optional, Union
 import redis.asyncio as aioredis
-
 from backend.core.config import settings
 from backend.core.logger import logger
 
@@ -22,7 +20,6 @@ async def connect_to_redis() -> aioredis.Redis:
     global _redis_client, _is_mock
     if settings.USE_MOCK_DB or settings.ENVIRONMENT == "test":
         import fakeredis.aioredis as fakeredis_aioredis
-
         _redis_client = fakeredis_aioredis.FakeRedis(decode_responses=True)
         _is_mock = True
         logger.info("Using in-memory FakeRedis for test environment")
@@ -30,7 +27,10 @@ async def connect_to_redis() -> aioredis.Redis:
 
     try:
         client = aioredis.from_url(
-            settings.REDIS_URL, encoding="utf-8", decode_responses=True, socket_connect_timeout=2.0
+            settings.REDIS_URL,
+            encoding="utf-8",
+            decode_responses=True,
+            socket_connect_timeout=2.0
         )
         await client.ping()
         _redis_client = client
@@ -40,7 +40,6 @@ async def connect_to_redis() -> aioredis.Redis:
         logger.warning(f"Could not connect to live Redis ({e}). Initializing in-memory FakeRedis...")
         try:
             import fakeredis.aioredis as fakeredis_aioredis
-
             _redis_client = fakeredis_aioredis.FakeRedis(decode_responses=True)
             _is_mock = True
             logger.info("In-memory FakeRedis initialized successfully")

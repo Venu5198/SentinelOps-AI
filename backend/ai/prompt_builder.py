@@ -1,6 +1,7 @@
 import json
 from typing import Any, Dict, List
 
+
 SYSTEM_PROMPT = """You are SentinelOps AI, an expert IT Incident Investigation and Site Reliability Engineering assistant.
 Your task is to analyze diagnostic evidence from application incidents, identify probable root causes, and propose safe remediation actions.
 
@@ -17,7 +18,10 @@ CRITICAL SAFETY & INTEGRITY RULES:
 """
 
 
-def build_investigation_prompt(incident: Dict[str, Any], evidence_list: List[Dict[str, Any]]) -> str:
+def build_investigation_prompt(
+    incident: Dict[str, Any],
+    evidence_list: List[Dict[str, Any]]
+) -> str:
     formatted_evidence = []
     for ev in evidence_list:
         ev_item = {
@@ -27,7 +31,7 @@ def build_investigation_prompt(incident: Dict[str, Any], evidence_list: List[Dic
             "name": ev.get("name"),
             "summary": ev.get("summary"),
             "observed_at": str(ev.get("observed_at")),
-            "payload": ev.get("payload"),
+            "payload": ev.get("payload")
         }
         formatted_evidence.append(ev_item)
 
@@ -54,7 +58,7 @@ def build_investigation_prompt(incident: Dict[str, Any], evidence_list: List[Dic
 Generate your investigation report strictly as a JSON object matching this schema:
 {{
   "incident_summary": "Concise summary of the incident and operational impact",
-  "affected_service": "{incident.get("service_name")}",
+  "affected_service": "{incident.get('service_name')}",
   "observed_symptoms": ["list", "of", "facts"],
   "probable_root_causes": [
     {{
@@ -70,7 +74,7 @@ Generate your investigation report strictly as a JSON object matching this schem
     {{
       "action_id": "service.restart_container",
       "action_name": "Restart application container",
-      "target_service": "{incident.get("service_name")}",
+      "target_service": "{incident.get('service_name')}",
       "parameters": {{}},
       "rationale": "Why this action is expected to resolve the issue",
       "risk_level": "MEDIUM",
@@ -80,3 +84,4 @@ Generate your investigation report strictly as a JSON object matching this schem
 }}
 """
     return user_prompt
+
