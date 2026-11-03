@@ -42,6 +42,8 @@ frontend/build/
 *.key
 *.cert
 *.pfx
+.last_known_good_deployment.json
+deployment_events.log
 
 # IDE & OS
 .vscode/
