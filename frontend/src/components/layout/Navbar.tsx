@@ -5,7 +5,14 @@ import { useNavigate } from 'react-router-dom';
 export const Navbar: React.FC = () => {
   const navigate = useNavigate();
   const userJson = localStorage.getItem('sentinelops_user');
-  const user = userJson ? JSON.parse(userJson) : null;
+  let user: any = null;
+  if (userJson) {
+    try {
+      user = JSON.parse(userJson);
+    } catch {
+      localStorage.removeItem('sentinelops_user');
+    }
+  }
 
   const handleLogout = () => {
     localStorage.removeItem('sentinelops_token');

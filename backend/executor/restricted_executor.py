@@ -2,30 +2,29 @@ import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict
-from fastapi import HTTPException, status
+
 import httpx
+from fastapi import HTTPException, status
+
 from backend.core.logger import logger
 from backend.db.mongodb import get_database
 from backend.db.redis import acquire_distributed_lock, release_distributed_lock
+from backend.executor.allowlist import is_action_allowlisted
 from backend.models.approval import ApprovalStatus
 from backend.models.incident import IncidentStatus
-from backend.models.remediation import ExecutionStatus, VerificationStatus, RemediationExecutionResponse
-from backend.executor.allowlist import is_action_allowlisted, ALLOWLISTED_ACTIONS
-from backend.services.approval_service import compute_action_signature, verify_action_signature
+from backend.models.remediation import ExecutionStatus, RemediationExecutionResponse, VerificationStatus
+from backend.services.approval_service import verify_action_signature
 from backend.services.audit_service import record_audit_log
 
 # Immutable security boundary: Only these exact container targets may be manipulated
 AUTHORIZED_DOCKER_TARGETS: Dict[str, str] = {
     "payment-service": "sentinelops-payment-service",
-    "order-service": "sentinelops-order-service"
+    "order-service": "sentinelops-order-service",
 }
 
 
 async def execute_approved_remediation(
-    approval_id: str,
-    actor_id: str,
-    actor_role: str,
-    request_ip: str = None
+    approval_id: str, actor_id: str, actor_role: str, request_ip: str = None
 ) -> RemediationExecutionResponse:
     """
     Executes an approved, allowlisted remediation operation (FR-08, AC-11, AC-12, AC-13).
@@ -53,13 +52,13 @@ async def execute_approved_remediation(
             await db.approvals.update_one({"_id": approval_id}, {"$set": {"status": ApprovalStatus.EXPIRED.value}})
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Approval record has expired and can no longer be executed"
+                detail="Approval record has expired and can no longer be executed",
             )
 
     if appr["status"] != ApprovalStatus.APPROVED.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot execute remediation with approval status '{appr['status']}'"
+            detail=f"Cannot execute remediation with approval status '{appr['status']}'",
         )
 
     action_id = appr["action_id"]
@@ -76,11 +75,11 @@ async def execute_approved_remediation(
             resource_id=action_id,
             result="failure",
             details={"service": target_service},
-            request_ip=request_ip
+            request_ip=request_ip,
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Action '{action_id}' on service '{target_service}' is not in the restricted allowlist"
+            detail=f"Action '{action_id}' on service '{target_service}' is not in the restricted allowlist",
         )
 
     # 3. Keyed HMAC action signature verification (AC-11, anti-tampering)
@@ -93,22 +92,22 @@ async def execute_approved_remediation(
             resource_id=approval_id,
             result="failure",
             details={"action_id": action_id, "target": target_service},
-            request_ip=request_ip
+            request_ip=request_ip,
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Action parameters do not match the cryptographically signed approval record"
+            detail="Action parameters do not match the cryptographically signed approval record",
         )
 
     # 4. Replay protection: Atomically transition approval to EXECUTED
     consumed = await db.approvals.update_one(
         {"_id": approval_id, "status": ApprovalStatus.APPROVED.value},
-        {"$set": {"status": "EXECUTED", "executed_at": now, "executed_by": actor_id}}
+        {"$set": {"status": "EXECUTED", "executed_at": now, "executed_by": actor_id}},
     )
     if consumed.modified_count == 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Approval has already been executed or is no longer in APPROVED status (replay prevented)"
+            detail="Approval has already been executed or is no longer in APPROVED status (replay prevented)",
         )
 
     # 5. Distributed execution lock on target service with unique lock token
@@ -119,7 +118,7 @@ async def execute_approved_remediation(
         await db.approvals.update_one({"_id": approval_id}, {"$set": {"status": ApprovalStatus.APPROVED.value}})
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Another remediation operation is already executing against service '{target_service}'"
+            detail=f"Another remediation operation is already executing against service '{target_service}'",
         )
 
     now = datetime.now(timezone.utc)
@@ -139,14 +138,13 @@ async def execute_approved_remediation(
         "verification_details": None,
         "executed_by": actor_id,
         "executed_at": now,
-        "completed_at": None
+        "completed_at": None,
     }
     await db.remediation_executions.insert_one(exec_doc)
 
     # Transition incident state to REMEDIATING
     await db.incidents.update_one(
-        {"_id": incident_id},
-        {"$set": {"status": IncidentStatus.REMEDIATING.value, "updated_at": now}}
+        {"_id": incident_id}, {"$set": {"status": IncidentStatus.REMEDIATING.value, "updated_at": now}}
     )
 
     try:
@@ -160,11 +158,13 @@ async def execute_approved_remediation(
 
         await db.remediation_executions.update_one(
             {"_id": exec_id},
-            {"$set": {
-                "status": ExecutionStatus.COMPLETED.value,
-                "execution_result": result_payload,
-                "completed_at": completed_at
-            }}
+            {
+                "$set": {
+                    "status": ExecutionStatus.COMPLETED.value,
+                    "execution_result": result_payload,
+                    "completed_at": completed_at,
+                }
+            },
         )
 
         await record_audit_log(
@@ -175,16 +175,16 @@ async def execute_approved_remediation(
             resource_id=exec_id,
             result="success",
             details={"action_id": action_id, "target": target_service},
-            request_ip=request_ip
+            request_ip=request_ip,
         )
 
         # 5. Transition incident to VERIFYING and trigger automated verification
         await db.incidents.update_one(
-            {"_id": incident_id},
-            {"$set": {"status": IncidentStatus.VERIFYING.value, "updated_at": completed_at}}
+            {"_id": incident_id}, {"$set": {"status": IncidentStatus.VERIFYING.value, "updated_at": completed_at}}
         )
 
         from backend.services.verification_service import verify_service_recovery
+
         asyncio.create_task(verify_service_recovery(incident_id, exec_id, target_service))
 
         return RemediationExecutionResponse(**exec_doc)
@@ -198,16 +198,17 @@ async def execute_approved_remediation(
 
         await db.remediation_executions.update_one(
             {"_id": exec_id},
-            {"$set": {
-                "status": ExecutionStatus.FAILED.value,
-                "execution_result": {"error": str(e)},
-                "completed_at": failed_at
-            }}
+            {
+                "$set": {
+                    "status": ExecutionStatus.FAILED.value,
+                    "execution_result": {"error": str(e)},
+                    "completed_at": failed_at,
+                }
+            },
         )
 
         await db.incidents.update_one(
-            {"_id": incident_id},
-            {"$set": {"status": IncidentStatus.FAILED.value, "updated_at": failed_at}}
+            {"_id": incident_id}, {"$set": {"status": IncidentStatus.FAILED.value, "updated_at": failed_at}}
         )
 
         await record_audit_log(
@@ -218,7 +219,7 @@ async def execute_approved_remediation(
             resource_id=exec_id,
             result="failure",
             details={"error": str(e)},
-            request_ip=request_ip
+            request_ip=request_ip,
         )
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
@@ -226,25 +227,21 @@ async def execute_approved_remediation(
         await release_distributed_lock(lock_key, lock_token)
 
 
-async def _dispatch_remediation_action(
-    action_id: str,
-    target_service: str,
-    params: Dict[str, Any]
-) -> Dict[str, Any]:
+async def _dispatch_remediation_action(action_id: str, target_service: str, params: Dict[str, Any]) -> Dict[str, Any]:
     """Pure typed execution adapter. Never invokes shell or raw subprocess strings."""
     if action_id == "service.restart_container":
         # Strict container authorization enforcement
         if target_service not in AUTHORIZED_DOCKER_TARGETS:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Service '{target_service}' is not in the authorized Docker container catalog"
+                detail=f"Service '{target_service}' is not in the authorized Docker container catalog",
             )
         authorized_container = AUTHORIZED_DOCKER_TARGETS[target_service]
 
         db = get_database()
         service = await db.services.find_one({"name": target_service})
         base_url = service["endpoint_url"] if service else "http://localhost:8080"
-        
+
         candidate_bases = [base_url]
         if "payment-service" in target_service or "8080" in base_url:
             candidate_bases.extend(["http://payment-service:8080", "http://localhost:8080"])
@@ -265,18 +262,25 @@ async def _dispatch_remediation_action(
                 except Exception as e:
                     logger.debug(f"Target service reset probe notice on {b}: {e}")
 
-        # Strictly operate on authorized container using Docker SDK
-        try:
-            import docker
-            docker_client = docker.from_env()
-            c = docker_client.containers.get(authorized_container)
-            if c.status != "running":
-                c.start()
-            else:
-                c.restart(timeout=10)
-            logger.info(f"Started/restarted authorized container {authorized_container} via Docker SDK")
-        except Exception as e:
-            logger.debug(f"Docker SDK restart notice on {authorized_container}: {e}")
+        # In test environments, mock container restart to ensure strict CI isolation
+        from backend.core.config import settings
+
+        if settings.ENVIRONMENT == "test" or settings.USE_MOCK_DB:
+            logger.info(f"Test environment active: simulated container restart for {authorized_container}")
+        else:
+            # Strictly operate on authorized container using Docker SDK in production
+            try:
+                import docker
+
+                docker_client = docker.from_env()
+                c = docker_client.containers.get(authorized_container)
+                if c.status != "running":
+                    c.start()
+                else:
+                    c.restart(timeout=10)
+                logger.info(f"Started/restarted authorized container {authorized_container} via Docker SDK")
+            except Exception as e:
+                logger.debug(f"Docker SDK restart notice on {authorized_container}: {e}")
 
         await asyncio.sleep(1.5)
         return {
@@ -284,7 +288,7 @@ async def _dispatch_remediation_action(
             "target": target_service,
             "container_restarted": True,
             "reset_triggered": reset_triggered,
-            "message": f"Container {target_service} restarted successfully"
+            "message": f"Container {target_service} restarted successfully",
         }
 
     elif action_id == "service.health_check":
@@ -297,19 +301,26 @@ async def _dispatch_remediation_action(
                 "action": "service.health_check",
                 "target": target_service,
                 "status_code": resp.status_code,
-                "body": resp.text
+                "body": resp.text,
             }
 
     elif action_id == "cache.clear_service_key":
         from backend.db.redis import get_redis
+
         r = get_redis()
         key_pattern = params.get("key_pattern", f"{target_service}:*")
+        cleared = 0
+        try:
+            keys = await r.keys(key_pattern)
+            if keys:
+                cleared = await r.delete(*keys)
+        except Exception as e:
+            logger.debug(f"Redis cache clear notice for {key_pattern}: {e}")
         return {
             "action": "cache.clear_service_key",
             "target": target_service,
             "pattern": key_pattern,
-            "keys_cleared": 1
+            "keys_cleared": cleared,
         }
 
     raise ValueError(f"Unsupported action: {action_id}")
-

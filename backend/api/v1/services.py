@@ -92,7 +92,7 @@ async def probe_service_health(
     error_msg = None
 
     candidate_urls = [target_url]
-    svc_name = service.get("name", "")
+    service.get("name", "")
     if "localhost:8080" in target_url:
         candidate_urls.append(f"http://payment-service:8080{service['health_endpoint']}")
     elif "localhost:8081" in target_url:

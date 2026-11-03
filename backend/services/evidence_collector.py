@@ -43,17 +43,17 @@ async def collect_evidence_for_incident(incident_id: str, service_name: str) -> 
 async def _collect_health_probe_evidence(incident_id: str, service_name: str, now: datetime) -> Dict[str, Any]:
     db = get_database()
     service = await db.services.find_one({"name": service_name})
-    base_endpoint = f"{service['endpoint_url']}{service['health_endpoint']}" if service else f"http://localhost:8080/health"
+    base_endpoint = f"{service['endpoint_url']}{service['health_endpoint']}" if service else "http://localhost:8080/health"
 
     candidate_endpoints = [base_endpoint]
     if "localhost:8080" in base_endpoint:
-        candidate_endpoints.append(f"http://payment-service:8080/health")
+        candidate_endpoints.append("http://payment-service:8080/health")
     elif "localhost:8081" in base_endpoint:
-        candidate_endpoints.append(f"http://order-service:8081/health")
+        candidate_endpoints.append("http://order-service:8081/health")
     elif "payment-service" in base_endpoint:
-        candidate_endpoints.append(f"http://localhost:8080/health")
+        candidate_endpoints.append("http://localhost:8080/health")
     elif "order-service" in base_endpoint:
-        candidate_endpoints.append(f"http://localhost:8081/health")
+        candidate_endpoints.append("http://localhost:8081/health")
 
     payload = {"endpoint": base_endpoint, "status": "UNKNOWN", "response_code": None, "error": None}
     async with httpx.AsyncClient(timeout=4.0) as client:
