@@ -2,6 +2,7 @@ version: "3.8"
 
 services:
   frontend:
+    image: ${FRONTEND_IMAGE:-sentinelopsai-frontend:latest}
     build:
       context: .
       dockerfile: Dockerfile.frontend
@@ -13,6 +14,7 @@ services:
     restart: unless-stopped
 
   backend:
+    image: ${BACKEND_IMAGE:-sentinelopsai-backend:latest}
     build:
       context: .
       dockerfile: Dockerfile.backend

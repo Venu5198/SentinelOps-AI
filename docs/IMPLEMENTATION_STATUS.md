@@ -131,8 +131,34 @@ Implemented and verified automated GitHub Actions pipeline (`.github/workflows/c
 
 ---
 
-## 9. Git Repository State
+## 9. Phase 6: Continuous Deployment (CD) Pipeline
 
-- **Active Branch:** `feature/phase-5-ci-pipeline`
-- **Remote:** `origin https://github.com/Venu5198/SentinelOps-AI.git`
-- **Ready for PR:** Feature branch ready to push and open pull request.
+Implemented and verified automated GitHub Actions deployment pipeline (.github/workflows/cd.yml):
+1. **Triggering:**
+   - **Automated**: workflow_run after successful completion of SentinelOps AI Continuous Integration on main.
+   - **Manual Dispatch**: workflow_dispatch supporting staging and production environments with deploy and 
+ollback actions.
+2. **Container Image Strategy:**
+   - Multi-stage build for backend and frontend images.
+   - Pinned immutable tagging using Git commit SHA (ghcr.io/<repo>/backend:<sha>) and environment tags (:production, :staging).
+   - Vulnerability scanning with Trivy (quasecurity/trivy-action) before release publishing to GHCR.
+3. **Automated Health Verification Prober (scripts/verify_deployment.py):**
+   - Probes 7 platform endpoints (Frontend, Backend /health, Backend /ready, Payment Service, Order Service, Prometheus, Alertmanager).
+   - Enforces 3 consecutive healthy cycles before confirming deployment success.
+4. **Automated & Manual Rollback Strategy (scripts/deploy.py):**
+   - Pre-deployment snapshot saves previous known-good image tags to .last_known_good_deployment.json.
+   - Automatically triggers rollback to previous known-good release if post-deploy health verification fails.
+   - **Non-destructive guarantee**: Database volumes (mongodb_data, 
+edis_data) are preserved and never wiped during rollback.
+5. **Quality & Test Coverage:**
+   - Added 	ests/test_cd_pipeline.py with 6 automated tests covering probe health streaks, unhealthy component detection, dry-run deployment, state persistence, and rollback controller triggers.
+   - Total test suite expanded to **22/22 Automated Tests Passed (100%)**.
+
+---
+
+## 10. Git Repository State
+
+- **Active Branch:** eature/phase-6-continuous-deployment
+- **Remote:** origin https://github.com/Venu5198/SentinelOps-AI.git
+- **Latest Commit on main:** 91c947f (Merge PR #1)
+- **Status:** Phase 6 CD implementation, controller, tests, and documentation verified and ready for PR.
