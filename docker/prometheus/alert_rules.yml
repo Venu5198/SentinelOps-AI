@@ -41,3 +41,34 @@ groups:
           summary: "Order Service instance unreachable"
           description: "Target failed to respond to Prometheus health probe"
 
+  - name: sentinelops_reliability_alerts
+    rules:
+      - alert: SentinelOpsBackendDown
+        expr: up{job="backend"} == 0
+        for: 15s
+        labels:
+          severity: critical
+          service: sentinelops-backend
+        annotations:
+          summary: "SentinelOps AI Backend process is DOWN"
+          description: "Core API and incident lifecycle engine failed to respond to scrape probes"
+
+      - alert: SentinelOpsDatabaseDegraded
+        expr: sentinelops_dependency_up{dependency="mongodb"} == 0
+        for: 10s
+        labels:
+          severity: critical
+          service: sentinelops-backend
+        annotations:
+          summary: "SentinelOps MongoDB connectivity degraded"
+          description: "Database readiness probe failed or timed out"
+
+      - alert: SentinelOpsRedisDegraded
+        expr: sentinelops_dependency_up{dependency="redis"} == 0
+        for: 10s
+        labels:
+          severity: high
+          service: sentinelops-backend
+        annotations:
+          summary: "SentinelOps Redis connectivity degraded"
+          description: "Distributed cache and deduplication coordinator failed probe"

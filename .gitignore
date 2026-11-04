@@ -73,3 +73,6 @@ scratch/
 *.log
 
 
+
+# MongoDB and disaster recovery backups
+backups/
