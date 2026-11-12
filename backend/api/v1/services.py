@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 import httpx
 from backend.core.rbac import get_current_user, require_role, AuthenticatedUser, UserRole
@@ -15,21 +15,23 @@ router = APIRouter(prefix="/services", tags=["Services Registry & Monitoring"])
 async def register_service(
     service_in: ServiceCreate,
     request: Request,
-    current_user: AuthenticatedUser = Depends(require_role(["admin"]))
+    current_user: AuthenticatedUser = Depends(require_role(["admin", "operator"]))
 ):
     db = get_database()
-    existing = await db.services.find_one({"name": service_in.name})
+    existing = await db.services.find_one({"name": service_in.name, "project_id": service_in.project_id})
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Service '{service_in.name}' is already registered"
+            detail=f"Service '{service_in.name}' is already registered in this project"
         )
     service_id = f"service_{uuid.uuid4().hex[:10]}"
     now = datetime.now(timezone.utc)
     service_doc = {
         "_id": service_id,
         "name": service_in.name,
+        "project_id": service_in.project_id,
         "environment": service_in.environment,
+        "service_type": service_in.service_type.value if hasattr(service_in.service_type, 'value') else str(service_in.service_type),
         "endpoint_url": service_in.endpoint_url.rstrip("/"),
         "health_endpoint": service_in.health_endpoint,
         "metrics_endpoint": service_in.metrics_endpoint,
@@ -47,7 +49,7 @@ async def register_service(
         action="SERVICE_REGISTERED",
         resource_type="service",
         resource_id=service_id,
-        details={"service_name": service_in.name},
+        details={"service_name": service_in.name, "project_id": service_in.project_id},
         request_ip=request.client.host if request.client else None
     )
 
@@ -55,10 +57,20 @@ async def register_service(
 
 
 @router.get("", response_model=List[ServiceResponse])
-async def list_services(current_user: AuthenticatedUser = Depends(get_current_user)):
+async def list_services(
+    project_id: Optional[str] = None,
+    environment: Optional[str] = None,
+    current_user: AuthenticatedUser = Depends(get_current_user)
+):
     db = get_database()
-    cursor = db.services.find().sort("name", 1)
-    services = await cursor.to_list(length=100)
+    query = {}
+    if project_id:
+        query["project_id"] = project_id
+    if environment:
+        query["environment"] = environment
+
+    cursor = db.services.find(query).sort("name", 1)
+    services = await cursor.to_list(length=200)
     return [ServiceResponse(**s) for s in services]
 
 

@@ -17,10 +17,12 @@ async def list_incidents(
     status_filter: Optional[str] = Query(None, alias="status"),
     service_filter: Optional[str] = Query(None, alias="service"),
     severity_filter: Optional[str] = Query(None, alias="severity"),
+    project_id: Optional[str] = Query(None, alias="project_id"),
+    environment: Optional[str] = Query(None, alias="environment"),
     limit: int = Query(50, ge=1, le=200),
     current_user: AuthenticatedUser = Depends(get_current_user)
 ):
-    """List and filter incidents by status, service, and severity (FR-03, AC-04)."""
+    """List and filter incidents by status, service, severity, project, and environment (FR-03, AC-04)."""
     db = get_database()
     query = {}
     if status_filter:
@@ -29,6 +31,10 @@ async def list_incidents(
         query["service_name"] = service_filter
     if severity_filter:
         query["severity"] = severity_filter
+    if project_id:
+        query["project_id"] = project_id
+    if environment:
+        query["environment"] = environment
 
     cursor = db.incidents.find(query).sort("detected_at", -1).limit(limit)
     docs = await cursor.to_list(length=limit)

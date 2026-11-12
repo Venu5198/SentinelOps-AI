@@ -90,6 +90,8 @@ def is_valid_transition(current: IncidentStatus, target: IncidentStatus) -> bool
 class IncidentCreate(BaseSchema):
     fingerprint: str
     service_name: str
+    project_id: str = "proj_sentinelops_default"
+    environment: str = "local"
     severity: IncidentSeverity = IncidentSeverity.HIGH
     title: str
     description: str
@@ -108,6 +110,8 @@ class IncidentResponse(BaseSchema):
     id: str = Field(validation_alias="_id")
     fingerprint: str
     service_name: str
+    project_id: str = "proj_sentinelops_default"
+    environment: str = "local"
     severity: IncidentSeverity
     status: IncidentStatus
     title: str

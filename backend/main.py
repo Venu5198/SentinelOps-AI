@@ -1,3 +1,4 @@
+import datetime
 import uuid
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
@@ -15,6 +16,12 @@ from backend.models.service import HealthStatus
 # Import Routers
 from backend.api.v1.health import router as health_router
 from backend.api.v1.auth import router as auth_router
+from backend.api.v1.organizations import router as organizations_router
+from backend.api.v1.projects import router as projects_router
+from backend.api.v1.integrations import router as integrations_router
+from backend.api.v1.discovery import router as discovery_router
+from backend.api.v1.telemetry import router as telemetry_router
+from backend.api.v1.dashboards import router as dashboards_router
 from backend.api.v1.services import router as services_router
 from backend.api.v1.incidents import router as incidents_router
 from backend.api.v1.alerts import router as alerts_router
@@ -24,6 +31,7 @@ from backend.api.v1.approvals import router as approvals_router
 from backend.api.v1.remediations import router as remediations_router
 from backend.api.v1.audit import router as audit_router
 from backend.api.v1.reports import router as reports_router
+from backend.db.migrations import migrate_to_multi_project
 
 
 @asynccontextmanager
@@ -33,7 +41,8 @@ async def lifespan(app: FastAPI):
     db = await connect_to_mongodb()
     await connect_to_redis()
 
-    # Seed default Admin and sample Services if empty
+    # Run non-destructive multi-project migrations and seedings
+    await migrate_to_multi_project(db)
     await _seed_initial_data(db)
 
     logger.info("SentinelOps AI backend initialization complete")
@@ -47,18 +56,18 @@ async def lifespan(app: FastAPI):
 
 async def _seed_initial_data(db):
     try:
+        now = datetime.datetime.now(datetime.timezone.utc)
         # 1. Seed Default Admin Accounts
         for email_addr in ["admin@sentinelops.local", "admin@sentinelops.com"]:
             existing = await db.users.find_one({"email": email_addr})
             if not existing:
-                import datetime
                 admin_doc = {
                     "_id": f"user_admin_{uuid.uuid4().hex[:8]}",
                     "email": email_addr,
                     "password_hash": get_password_hash("AdminPass123!"),
                     "role": UserRole.ADMIN.value,
                     "is_active": True,
-                    "created_at": datetime.datetime.now(datetime.timezone.utc)
+                    "created_at": now
                 }
                 await db.users.insert_one(admin_doc)
                 logger.info(f"Seeded initial admin account: {email_addr}")
@@ -70,7 +79,6 @@ async def _seed_initial_data(db):
                 )
 
         # 2. Seed / Sync Monitored Services (payment-service, order-service)
-        now = datetime.datetime.now(datetime.timezone.utc)
         services_specs = [
             {
                 "_id": "svc_payment_001",
@@ -161,6 +169,12 @@ def metrics():
 api_v1_prefix = "/api/v1"
 app.include_router(health_router, prefix=api_v1_prefix)
 app.include_router(auth_router, prefix=api_v1_prefix)
+app.include_router(organizations_router, prefix=api_v1_prefix)
+app.include_router(projects_router, prefix=api_v1_prefix)
+app.include_router(integrations_router, prefix=api_v1_prefix)
+app.include_router(discovery_router, prefix=api_v1_prefix)
+app.include_router(telemetry_router, prefix=api_v1_prefix)
+app.include_router(dashboards_router, prefix=api_v1_prefix)
 app.include_router(services_router, prefix=api_v1_prefix)
 app.include_router(incidents_router, prefix=api_v1_prefix)
 app.include_router(alerts_router, prefix=api_v1_prefix)

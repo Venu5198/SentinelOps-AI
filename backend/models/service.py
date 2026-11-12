@@ -12,9 +12,22 @@ class HealthStatus(str, Enum):
     UNKNOWN = "unknown"
 
 
+class ServiceType(str, Enum):
+    BACKEND_API = "backend_api"
+    FRONTEND = "frontend"
+    DATABASE = "database"
+    CACHE = "cache"
+    MESSAGE_BROKER = "message_broker"
+    WORKER = "worker"
+    EXTERNAL_API = "external_api"
+    OTHER = "other"
+
+
 class ServiceCreate(BaseSchema):
     name: str = Field(min_length=2, max_length=50)
+    project_id: str = "proj_sentinelops_default"
     environment: str = "local"
+    service_type: ServiceType = ServiceType.BACKEND_API
     endpoint_url: str
     health_endpoint: str = "/health"
     metrics_endpoint: str = "/metrics"
@@ -25,9 +38,12 @@ class ServiceCreate(BaseSchema):
 class ServiceResponse(BaseSchema):
     id: str = Field(validation_alias="_id")
     name: str
+    project_id: str = "proj_sentinelops_default"
     environment: str
+    service_type: ServiceType = ServiceType.BACKEND_API
     endpoint_url: str
     health_endpoint: str = "/health"
+    metrics_endpoint: str = "/metrics"
     health_status: HealthStatus = HealthStatus.UNKNOWN
     monitoring_enabled: bool = True
     last_check_at: Optional[datetime] = None

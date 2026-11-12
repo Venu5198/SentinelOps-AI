@@ -3,9 +3,14 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
 import { DashboardPage } from './pages/DashboardPage';
+import { ProjectsPage } from './pages/ProjectsPage';
+import { ProjectDashboardPage } from './pages/ProjectDashboardPage';
 import { IncidentsPage } from './pages/IncidentsPage';
 import { IncidentDetailPage } from './pages/IncidentDetailPage';
 import { ServicesPage } from './pages/ServicesPage';
+import { DiscoveryPage } from './pages/DiscoveryPage';
+import { IntegrationsPage } from './pages/IntegrationsPage';
+import { TelemetryExplorerPage } from './pages/TelemetryExplorerPage';
 import { AuditLogPage } from './pages/AuditLogPage';
 import { LoginPage } from './pages/LoginPage';
 
@@ -33,9 +38,14 @@ export const App: React.FC = () => {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<ProtectedLayout><DashboardPage /></ProtectedLayout>} />
+        <Route path="/projects" element={<ProtectedLayout><ProjectsPage /></ProtectedLayout>} />
+        <Route path="/projects/:projectId" element={<ProtectedLayout><ProjectDashboardPage /></ProtectedLayout>} />
         <Route path="/incidents" element={<ProtectedLayout><IncidentsPage /></ProtectedLayout>} />
         <Route path="/incidents/:id" element={<ProtectedLayout><IncidentDetailPage /></ProtectedLayout>} />
         <Route path="/services" element={<ProtectedLayout><ServicesPage /></ProtectedLayout>} />
+        <Route path="/discovery" element={<ProtectedLayout><DiscoveryPage /></ProtectedLayout>} />
+        <Route path="/integrations" element={<ProtectedLayout><IntegrationsPage /></ProtectedLayout>} />
+        <Route path="/telemetry" element={<ProtectedLayout><TelemetryExplorerPage /></ProtectedLayout>} />
         <Route path="/approvals" element={<ProtectedLayout><IncidentsPage /></ProtectedLayout>} />
         <Route path="/audit" element={<ProtectedLayout><AuditLogPage /></ProtectedLayout>} />
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -43,4 +53,3 @@ export const App: React.FC = () => {
     </BrowserRouter>
   );
 };
-
