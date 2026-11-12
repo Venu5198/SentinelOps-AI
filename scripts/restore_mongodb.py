@@ -155,7 +155,7 @@ def main():
     parser.add_argument("--container", default="sentinelops-mongodb", help="MongoDB container name")
     parser.add_argument("--source-db", default="sentinelops", help="Original database name in archive")
     parser.add_argument("--target-db", default="sentinelops_recovery_test", help="Target database name")
-    parser.add_argument("--mongo-uri", default="mongodb://localhost:27017", help="MongoDB URI for verification")
+    parser.add_argument("--mongo-uri", default="mongodb://localhost:27018", help="MongoDB URI for verification")
     args = parser.parse_args()
 
     # 1. Verify archive exists and checksum if manifest present

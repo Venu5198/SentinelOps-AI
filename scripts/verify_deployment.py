@@ -17,14 +17,17 @@ import argparse
 import asyncio
 import sys
 import time
+import os
 from typing import Dict, Any, List
 import httpx
 
+FRONTEND_PORT = os.environ.get("SENTINELOPS_FRONTEND_PORT", "4000")
+BACKEND_PORT = os.environ.get("SENTINELOPS_BACKEND_PORT", "9000")
 
 DEFAULT_TARGETS = {
-    "frontend": "http://localhost:3000/",
-    "backend_health": "http://localhost:8000/health",
-    "backend_ready": "http://localhost:8000/ready",
+    "frontend": f"http://localhost:{FRONTEND_PORT}/",
+    "backend_health": f"http://localhost:{BACKEND_PORT}/health",
+    "backend_ready": f"http://localhost:{BACKEND_PORT}/ready",
     "payment_service": "http://localhost:8080/health",
     "order_service": "http://localhost:8081/health",
     "prometheus": "http://localhost:9090/-/healthy",
