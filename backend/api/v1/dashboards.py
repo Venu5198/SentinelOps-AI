@@ -88,3 +88,4 @@ async def get_project_dashboard(
             "active_incidents": sum(1 for i in incidents if i.get("status") not in ["RESOLVED", "CLOSED"])
         }
     }
+

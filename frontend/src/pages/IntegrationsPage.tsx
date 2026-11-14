@@ -231,3 +231,4 @@ export const IntegrationsPage: React.FC = () => {
     </div>
   );
 };
+

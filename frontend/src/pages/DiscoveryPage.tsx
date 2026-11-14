@@ -154,3 +154,4 @@ export const DiscoveryPage: React.FC = () => {
     </div>
   );
 };
+

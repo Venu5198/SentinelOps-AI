@@ -77,3 +77,4 @@ async def query_traces(
         "traces": [],
         "status": "ready"
     }
+
