@@ -77,7 +77,11 @@ async def migrate_to_multi_project(db):
         logger.info(f"Migrated {res_inc.modified_count} existing incidents to project: {default_proj_id}")
 
     # 6. Ensure indexes for multi-tenant queries
-    await db.services.create_index([("project_id", 1), ("name", 1)])
+    try:
+        await db.services.drop_index("name_1")
+    except Exception:
+        pass
+    await db.services.create_index([("project_id", 1), ("name", 1)], unique=True)
     await db.incidents.create_index([("project_id", 1), ("status", 1)])
     await db.environments.create_index([("project_id", 1), ("slug", 1)], unique=True)
     await db.projects.create_index([("organization_id", 1), ("slug", 1)], unique=True)

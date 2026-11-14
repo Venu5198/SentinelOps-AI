@@ -68,12 +68,18 @@ async def trigger_docker_discovery(
                     detected_endpoints.append(f"http://host.docker.internal:{host_port}")
 
             item_id = f"disc_{c.short_id}"
+            image_name = "unknown"
+            try:
+                image_name = c.image.tags[0] if (c.image and c.image.tags) else (c.attrs.get("Config", {}).get("Image") or c.short_id)
+            except Exception:
+                image_name = c.attrs.get("Config", {}).get("Image") or c.short_id
+
             doc = {
                 "_id": item_id,
                 "name": c_name,
                 "container_id": c.short_id,
                 "container_name": c_name,
-                "image": c.image.tags[0] if c.image.tags else c.image.id[:12],
+                "image": image_name,
                 "source": DiscoverySource.DOCKER.value,
                 "detected_endpoints": detected_endpoints,
                 "detected_health_path": "/health",
@@ -111,25 +117,39 @@ async def approve_discovered_service(
 
     target_url = approve_in.endpoint_url or (disc["detected_endpoints"][0] if disc["detected_endpoints"] else "http://host.docker.internal:8000")
     
-    # Register as official service
-    service_id = f"svc_{uuid.uuid4().hex[:10]}"
+    # Register or update as official service (upsert per project to prevent duplicate errors)
     now = datetime.now(timezone.utc)
-    service_doc = {
-        "_id": service_id,
-        "name": disc["name"],
-        "project_id": approve_in.project_id,
-        "environment": approve_in.environment,
-        "service_type": "backend_api",
-        "endpoint_url": target_url.rstrip("/"),
-        "health_endpoint": approve_in.health_endpoint,
-        "metrics_endpoint": "/metrics",
-        "health_status": HealthStatus.UNKNOWN.value,
-        "monitoring_enabled": True,
-        "last_check_at": None,
-        "last_error": None,
-        "created_at": now
-    }
-    await db.services.insert_one(service_doc)
+    existing_svc = await db.services.find_one({"name": disc["name"], "project_id": approve_in.project_id})
+    if existing_svc:
+        service_id = existing_svc["_id"]
+        await db.services.update_one(
+            {"_id": service_id},
+            {"$set": {
+                "endpoint_url": target_url.rstrip("/"),
+                "health_endpoint": approve_in.health_endpoint,
+                "environment": approve_in.environment,
+                "monitoring_enabled": True,
+                "updated_at": now
+            }}
+        )
+    else:
+        service_id = f"svc_{uuid.uuid4().hex[:10]}"
+        service_doc = {
+            "_id": service_id,
+            "name": disc["name"],
+            "project_id": approve_in.project_id,
+            "environment": approve_in.environment,
+            "service_type": "backend_api",
+            "endpoint_url": target_url.rstrip("/"),
+            "health_endpoint": approve_in.health_endpoint,
+            "metrics_endpoint": "/metrics",
+            "health_status": HealthStatus.UNKNOWN.value,
+            "monitoring_enabled": True,
+            "last_check_at": None,
+            "last_error": None,
+            "created_at": now
+        }
+        await db.services.insert_one(service_doc)
 
     # Mark discovery as approved
     await db.discovered_services.update_one(
