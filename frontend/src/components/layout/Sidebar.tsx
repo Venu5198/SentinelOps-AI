@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, AlertTriangle, Server, FileText, CheckCircle2 } from 'lucide-react';
+import { 
+  LayoutDashboard, AlertTriangle, Server, FileText, CheckCircle2, 
+  FolderKanban, Scan, Activity, Terminal 
+} from 'lucide-react';
 import { api } from '../../services/api';
 
 export const Sidebar: React.FC = () => {
@@ -20,15 +23,22 @@ export const Sidebar: React.FC = () => {
 
   const links = [
     { to: '/', label: 'Overview', icon: LayoutDashboard },
+    { to: '/projects', label: 'Projects', icon: FolderKanban },
     { to: '/incidents', label: 'Incidents', icon: AlertTriangle },
-    { to: '/services', label: 'Services', icon: Server },
+    { to: '/services', label: 'Services Fleet', icon: Server },
+    { to: '/discovery', label: 'Discovery', icon: Scan },
+    { to: '/telemetry', label: 'Telemetry Explorer', icon: Terminal },
+    { to: '/integrations', label: 'Integrations', icon: Activity },
     { to: '/approvals', label: 'Approvals', icon: CheckCircle2 },
     { to: '/audit', label: 'Audit Logs', icon: FileText },
   ];
 
   return (
-    <aside className="w-60 border-r border-slate-800 bg-slate-900/50 flex flex-col justify-between py-6 px-3">
+    <aside className="w-64 border-r border-slate-800 bg-slate-900/60 flex flex-col justify-between py-6 px-3">
       <nav className="space-y-1.5">
+        <div className="px-3.5 pb-2 text-[11px] font-semibold tracking-wider uppercase text-slate-500">
+          Observability Platform
+        </div>
         {links.map((link) => {
           const Icon = link.icon;
           return (
@@ -67,4 +77,3 @@ export const Sidebar: React.FC = () => {
     </aside>
   );
 };
-
